@@ -67,9 +67,17 @@ function applicationStatus(username) {
   return getDb().prepare('SELECT status FROM seller_applications WHERE username = ?').get(username)?.status || 'pending';
 }
 
+// customer_approvals is the only source of a customer's status. No row counts as pending.
+function customerApproval(username) {
+  const row = getDb().prepare('SELECT status, reason FROM customer_approvals WHERE username = ?').get(username);
+  return { approvalStatus: row?.status || 'pending', approvalReason: row?.status === 'rejected' ? row.reason : '' };
+}
+
 function toAccount(role, row) {
   const account = { ...JSON.parse(row.profile), username: row.username, email: row.email, role, createdAt: row.created_at };
-  return role === 'seller' ? { ...account, applicationStatus: applicationStatus(row.username) } : account;
+  if (role === 'seller') return { ...account, applicationStatus: applicationStatus(row.username) };
+  if (role === 'customer') return { ...account, ...customerApproval(row.username) };
+  return account;
 }
 
 const tokenHash = (token) => createHash('sha256').update(token).digest('hex');
@@ -126,7 +134,21 @@ export function sellerFrom(request) {
 
 // A signed-in seller at any stage, for the application pages only.
 export const applicantFrom = (request) => accountFrom('seller', request, 'Log in to Seller Centre first.').username;
-export const customerFrom = (request) => accountFrom('customer', request, 'Log in to your Onetap account first.');
+
+// A signed-in customer at any approval stage, for their status, ID resubmission and notices only.
+export const customerAccountFrom = (request) => accountFrom('customer', request, 'Log in to your Onetap account first.');
+
+export const CUSTOMER_NOT_APPROVED = {
+  pending: 'Your account is waiting for approval. You can shop once an administrator approves it.',
+  rejected: 'Your registration was not approved. Update your valid ID to apply again.',
+};
+
+// For buying, orders and shop chat: only approved customers.
+export function customerFrom(request) {
+  const customer = customerAccountFrom(request);
+  if (customer.approvalStatus !== 'approved') throw new ApiError(403, CUSTOMER_NOT_APPROVED[customer.approvalStatus] || CUSTOMER_NOT_APPROVED.pending);
+  return customer;
+}
 
 // Ends every session for an account, for password changes and disabled administrators.
 export function endSessions(role, username) {
@@ -138,7 +160,9 @@ export function shopNameOf(username) {
   return toAccount('seller', row).shopName;
 }
 
-export async function registerAccount(role, request, input) {
+// `alongside(username)` runs in the same transaction as the account insert, so a failure there
+// leaves no account behind.
+export async function registerAccount(role, request, input, alongside) {
   if (typeof input !== 'object' || input === null) throw new ApiError(400, 'That request could not be read.');
   const { table, schema } = ROLES[role];
   validateAccount(schema, input);
@@ -154,12 +178,22 @@ export async function registerAccount(role, request, input) {
   }
   const profile = Object.fromEntries(
     schema.flatMap((section) => section.fields)
-      .filter(({ name, type }) => !['username', 'email', 'password'].includes(name) && type !== 'file')
+      // Private fields, like a customer's ID number, are stored with their approval, never in the profile.
+      .filter(({ name, type, private: hidden }) => !['username', 'email', 'password'].includes(name) && type !== 'file' && !hidden)
       .map(({ name }) => [name, String(rest[name] ?? '').trim()]),
   );
   const hash = await hashPassword(password);
-  db.prepare(`INSERT INTO ${table} (username, email, password, profile, created_at) VALUES (?, ?, ?, ?, ?)`)
-    .run(username, email, hash, JSON.stringify(profile), Date.now());
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.prepare(`INSERT INTO ${table} (username, email, password, profile, created_at) VALUES (?, ?, ?, ?, ?)`)
+      .run(username, email, hash, JSON.stringify(profile), Date.now());
+    alongside?.(username);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    if (/UNIQUE/.test(err.message) && /\.(username|email)/.test(err.message)) throw new ApiError(409, 'That username or email was just taken. Try another.');
+    throw err;
+  }
   await startSession(role, request, username);
   return toAccount(role, db.prepare(`SELECT * FROM ${table} WHERE username = ?`).get(username));
 }

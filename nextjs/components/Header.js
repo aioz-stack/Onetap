@@ -147,7 +147,7 @@ function AuthSlot({ t }) {
     <div className="topnav__auth">
       {user ? (
         <>
-          <Link className="topnav__item topnav__user" href="/orders">{t.myPurchases}</Link>
+          {user.approvalStatus === 'approved' && <Link className="topnav__item topnav__user" href="/orders">{t.myPurchases}</Link>}
           <button
             className="topnav__item"
             type="button"

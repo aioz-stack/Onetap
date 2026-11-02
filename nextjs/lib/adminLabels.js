@@ -54,6 +54,12 @@ export const LISTING_STATUS = {
   suspended: { label: 'Suspended', tone: 'danger' },
 };
 
+export const CUSTOMER_APPROVAL_STATUS = {
+  pending: { label: 'Pending Approval', tone: 'warn' },
+  approved: { label: 'Approved', tone: 'ok' },
+  rejected: { label: 'Rejected', tone: 'danger' },
+};
+
 export const APPLICATION_STATUS = {
   pending: { label: 'Pending Approval', tone: 'warn' },
   needs_info: { label: 'Information Requested', tone: 'warn' },

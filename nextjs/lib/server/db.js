@@ -52,6 +52,7 @@ export function getDb() {
   mkdirSync(UPLOAD_DIR, { recursive: true });
   database = new DatabaseSync(path.join(DATA_DIR, 'onetap.db'));
   const firstApplications = !database.prepare("SELECT 1 FROM sqlite_master WHERE name = 'seller_applications'").get();
+  const firstCustomerApprovals = !database.prepare("SELECT 1 FROM sqlite_master WHERE name = 'customer_approvals'").get();
   database.exec(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS products (
@@ -546,6 +547,43 @@ export function getDb() {
   database.exec("UPDATE orders SET data = json_set(data, '$.sandbox', json('true')) WHERE json_extract(data, '$.tracking') LIKE 'SBX-%' AND json_extract(data, '$.sandbox') IS NULL");
   if (firstApplications) {
     database.exec("INSERT OR IGNORE INTO seller_applications (username, status, submitted_at, decided_at, decided_by, updated_at) SELECT username, 'approved', created_at, created_at, 'existing account', created_at FROM sellers");
+  }
+  // Customer Approval. The valid ID is a private file in data/documents/customers. Its number
+  // (normalised in id_key) and its image (id_hash) can't belong to two accounts, unless the
+  // other was rejected, so a rejected application never blocks the real owner.
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS customer_approvals (
+      username TEXT PRIMARY KEY COLLATE NOCASE,
+      status TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
+      id_number TEXT NOT NULL DEFAULT '',
+      id_key TEXT NOT NULL DEFAULT '',
+      id_name TEXT NOT NULL DEFAULT '',
+      id_mime TEXT NOT NULL DEFAULT '',
+      id_size INTEGER NOT NULL DEFAULT 0,
+      id_stored TEXT NOT NULL DEFAULT '',
+      id_hash TEXT NOT NULL DEFAULT '',
+      submitted_at INTEGER NOT NULL,
+      decided_at INTEGER,
+      decided_by TEXT NOT NULL DEFAULT '',
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS customer_approvals_status ON customer_approvals (status, submitted_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS customer_id_number ON customer_approvals (id_key) WHERE id_key <> '' AND status <> 'rejected';
+    CREATE UNIQUE INDEX IF NOT EXISTS customer_id_image ON customer_approvals (id_hash) WHERE id_hash <> '' AND status <> 'rejected';
+    CREATE TABLE IF NOT EXISTS customer_approval_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer TEXT NOT NULL,
+      action TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
+      at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS customer_approval_history_customer ON customer_approval_history (customer, id);
+  `);
+  // Customers from before approvals keep shopping: they are marked approved once.
+  if (firstCustomerApprovals) {
+    database.exec("INSERT OR IGNORE INTO customer_approvals (username, status, submitted_at, decided_at, decided_by, updated_at) SELECT username, 'approved', created_at, created_at, 'existing account', created_at FROM customers");
   }
   // Products no longer wait for approval, so anything still waiting goes on sale.
   database.exec("UPDATE products SET status = 'live' WHERE status = 'review'");

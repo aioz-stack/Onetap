@@ -299,7 +299,10 @@ function CartView() {
         className="btn btn--primary btn--block"
         type="button"
         onClick={() => {
-          if (Auth.session('customer')) {
+          const customer = Auth.session('customer');
+          if (customer && customer.approvalStatus !== 'approved') {
+            toast(customer.approvalStatus === 'rejected' ? 'Your registration was not approved. Send a new ID from the notice at the top of the page.' : 'You can check out once your account is approved. We\'ll notify you.');
+          } else if (customer) {
             Modal.close();
             router.push('/checkout');
           } else {
@@ -322,6 +325,10 @@ function claimVouchers() {
   if (!Auth.session('customer')) {
     toast('Log in or sign up to claim your vouchers.');
     openCustomerLogin();
+    return;
+  }
+  if (Auth.session('customer').approvalStatus !== 'approved') {
+    toast('You can claim vouchers once your account is approved.');
     return;
   }
   if (Store.get('vouchersClaimed')) {

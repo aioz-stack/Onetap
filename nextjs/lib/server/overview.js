@@ -2,6 +2,7 @@
 
 import { can } from '../adminRoles';
 import { applicationCounts } from './applications';
+import { customerApprovalCounts } from './customerApprovals';
 import { codSummary } from './cod';
 import { getDb } from './db';
 import { csvResponse, equals, isoDate, listQuery, search } from './lists';
@@ -73,6 +74,7 @@ function alerts(admin) {
   if (can(admin, 'api')) add('critical', 'API errors in the last 24 hours', db.prepare("SELECT COUNT(*) AS c FROM api_logs WHERE outcome = 'failed' AND at >= ?").get(Date.now() - DAY).c, '/admin/api');
   if (can(admin, 'products')) add('warning', 'products flagged for a restricted term', flaggedListings(), '/admin/products?tab=live');
   if (can(admin, 'sellers')) add('warning', 'seller applications waiting for review', applicationCounts().pending, '/admin/sellers?tab=pending');
+  if (can(admin, 'customers')) add('warning', 'customer registrations waiting for approval', customerApprovalCounts().pending, '/admin/customers?tab=pending');
   if (can(admin, 'cod')) {
     const { overdue, discrepancies } = codSummary();
     add('warning', 'COD remittances overdue', overdue, '/admin/cod?status=collected');

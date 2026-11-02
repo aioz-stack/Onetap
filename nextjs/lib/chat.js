@@ -62,10 +62,10 @@ export const chatState = createState({ open: false, role: 'customer', activeId: 
 export const serverThreads = createState({ customer: [], seller: [] });
 let replyIndex = 0;
 
-// A seller only has conversations once approved.
+// Sellers and customers only have conversations with real shops once approved.
 const hasSession = (role) => {
   const account = Auth.session(role);
-  return Boolean(account) && (role === 'customer' || account.applicationStatus === 'approved');
+  return Boolean(account) && (role === 'customer' ? account.approvalStatus === 'approved' : account.applicationStatus === 'approved');
 };
 
 export const Chat = {
@@ -145,6 +145,11 @@ export const Chat = {
       return;
     }
     if (!hasSession('customer')) {
+      // Signed in but not approved yet: logging in again wouldn't help.
+      if (Auth.session('customer')) {
+        toast('You can chat with shops once your account is approved.');
+        return;
+      }
       chatState.set((state) => ({ ...state, open: true, role: 'customer', activeId: null, needsLogin: true }));
       return;
     }

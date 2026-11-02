@@ -81,7 +81,18 @@ export function applicationSchema(seller) {
     { legend: 'Replace Documents', fields: DOCUMENTS_SECTION.fields.map((field) => ({ ...field, optional: true, hint: 'Leave empty to keep your current file.' })) },
   ];
 }
-export const CUSTOMER_SCHEMA = [ACCOUNT_SECTION, PERSONAL_SECTION, addressSection('Shipping Address', 'City')];
+// A customer's valid ID: a clear photo and its number. Both are checked by an administrator in
+// Customer Approval before the account can buy.
+export const VALID_ID_TYPES = 'image/jpeg,image/png,image/webp';
+export const ID_NUMBER = { name: 'idNumber', label: 'ID Number', private: true, minlength: 4, maxlength: 30, pattern: '[A-Za-z0-9][A-Za-z0-9 \\-]*', placeholder: 'e.g., 1234-5678-9012-3456', hint: 'As printed on your ID. Letters, numbers, spaces and hyphens.' };
+export const VALID_ID = { name: 'validId', label: 'Valid ID', type: 'file', accept: VALID_ID_TYPES, hint: 'A clear photo of the front of a government-issued ID. JPG, PNG or WebP, up to 10 MB.', wide: true };
+
+const IDENTITY_SECTION = { legend: 'Identity Verification', fields: [VALID_ID, { ...ID_NUMBER, wide: true }] };
+
+export const CUSTOMER_SCHEMA = [ACCOUNT_SECTION, PERSONAL_SECTION, addressSection('Complete Address', 'City / Municipality'), IDENTITY_SECTION];
+
+// A rejected customer applies again with a new photo of their ID and its number.
+export const CUSTOMER_RESUBMIT_SCHEMA = [{ fields: [VALID_ID, { ...ID_NUMBER, wide: true }] }];
 
 export const LOGIN_SCHEMA = [{
   fields: [

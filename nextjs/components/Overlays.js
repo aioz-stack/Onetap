@@ -5,10 +5,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef } from 'react';
+import { Form, Sections } from './Forms';
 import Icon from './Icon';
 import { openPolicy } from './Support';
-import { Auth } from '@/lib/store';
-import { isSellerApp, Modal, modalState, toasts } from '@/lib/ui';
+import { CUSTOMER_RESUBMIT_SCHEMA } from '@/lib/schemas';
+import { Auth, FieldError, useStored } from '@/lib/store';
+import { isSellerApp, Modal, modalState, toast, toasts } from '@/lib/ui';
 
 export function ModalHost() {
   const { open, key, title, variant, content } = modalState.use();
@@ -77,19 +79,83 @@ export function Footer() {
   );
 }
 
-// Keeps the browser's copy of the customer in step with their session on the server.
+const APPROVAL_CHECK_MS = 15000;
+
+// Keeps the browser's copy of the customer in step with their session on the server. While a
+// customer waits for approval it checks again every 15 seconds, so an administrator's decision
+// shows without a reload.
 export function CustomerSession() {
+  const status = useStored('session.customer')?.approvalStatus;
+
   useEffect(() => {
-    fetch('/api/customer/auth/me')
+    const check = () => fetch('/api/customer/auth/me')
       .then((response) => (response.ok ? response.json() : null))
       .then((body) => {
-        if (body?.account) Auth.setAccount(body.account);
-        else if (body && Auth.session('customer')) Auth.clearAccount('customer');
+        if (body?.account) {
+          const before = Auth.session('customer')?.approvalStatus;
+          Auth.setAccount(body.account);
+          if (before && before !== 'approved' && body.account.approvalStatus === 'approved') toast('Your account is approved. You can check out now!', 'success');
+        } else if (body && Auth.session('customer')) Auth.clearAccount('customer');
       })
       .catch(() => {});
-  }, []);
+    check();
+    if (!status || status === 'approved') return undefined;
+    const timer = setInterval(check, APPROVAL_CHECK_MS);
+    return () => clearInterval(timer);
+  }, [status]);
 
   return null;
+}
+
+function ResubmitForm() {
+  return (
+    <Form
+      id="resubmit-form"
+      onSubmit={async (data) => {
+        const body = new FormData();
+        Object.entries(data).forEach(([key, value]) => body.append(key, value));
+        const response = await fetch('/api/customer/approval', { method: 'POST', body }).catch(() => null);
+        const result = await response?.json().catch(() => ({}));
+        if (!response?.ok) {
+          const [field] = Object.keys(result?.fields || {});
+          throw field ? new FieldError(field, result.fields[field]) : new Error(result?.error || 'We could not reach the server. Try again.');
+        }
+        const account = Auth.session('customer');
+        Auth.setAccount({ ...account, approvalStatus: 'pending', approvalReason: '' });
+        Modal.close();
+        toast('New ID sent. Your account is waiting for approval again.', 'success');
+      }}
+    >
+      <p className="muted">Take a clear photo of the front of your ID, with all four corners and the text readable.</p>
+      <Sections schema={CUSTOMER_RESUBMIT_SCHEMA} prefix="resubmit" />
+      <p className="form-error" role="alert" />
+      <button className="btn btn--primary btn--block" type="submit">Send for Approval</button>
+    </Form>
+  );
+}
+
+// Tells a customer who isn't approved yet what's happening, on every store page.
+export function CustomerApprovalBanner() {
+  const pathname = usePathname();
+  const customer = useStored('session.customer');
+  const status = customer?.approvalStatus;
+  if (!customer || !status || status === 'approved' || isSellerApp(pathname)) return null;
+  const rejected = status === 'rejected';
+  return (
+    <div className={`approval-banner${rejected ? ' approval-banner--rejected' : ''}`} role="status">
+      <div className="container approval-banner__row">
+        <Icon name={rejected ? 'shield' : 'clock'} />
+        <p>
+          {rejected ? (
+            <><strong>Your registration was not approved.</strong> {customer.approvalReason && <>Reason: {customer.approvalReason} </>}Send a new photo of your valid ID to apply again.</>
+          ) : (
+            <><strong>Your account is waiting for approval.</strong> You can browse and fill your cart. Checkout, My Purchases and shop chat open once our team checks your valid ID.</>
+          )}
+        </p>
+        {rejected && <button className="btn btn--primary" type="button" onClick={() => Modal.open({ title: 'Send a new valid ID', content: <ResubmitForm /> })}>Send New ID</button>}
+      </div>
+    </div>
+  );
 }
 
 // Moves focus with the page so screen readers announce the new view.

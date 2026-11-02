@@ -6,6 +6,6 @@ export const metadata = { title: 'Checkout' };
 
 export default async function CheckoutPage() {
   const customer = await currentAccount('customer');
-  if (!customer) redirect('/');
+  if (customer?.approvalStatus !== 'approved') redirect('/');
   return <Checkout customer={customer} />;
 }

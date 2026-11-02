@@ -1,7 +1,7 @@
 import { Inter } from 'next/font/google';
 import ChatBox from '@/components/ChatBox';
 import Header from '@/components/Header';
-import { CustomerSession, Footer, ModalHost, RouteFocus, Toasts } from '@/components/Overlays';
+import { CustomerApprovalBanner, CustomerSession, Footer, ModalHost, RouteFocus, Toasts } from '@/components/Overlays';
 import { StorefrontProvider } from '@/components/Storefront';
 import './globals.css';
 
@@ -31,6 +31,7 @@ export default function RootLayout({ children }) {
         <a className="skip-link" href="#main">Skip to content</a>
         <StorefrontProvider>
           <Header />
+          <CustomerApprovalBanner />
           <main id="main">{children}</main>
           <Footer />
           <ChatBox />

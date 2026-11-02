@@ -111,9 +111,9 @@ async function accountRequest(role, path, data) {
 
 export const Auth = {
   async register(role, data) {
-    // Seller registration carries document files.
-    const body = role === 'seller' ? new FormData() : data;
-    if (role === 'seller') Object.entries(data).forEach(([key, value]) => body.append(key, value));
+    // Seller registration carries documents, and customer registration a valid ID.
+    const body = new FormData();
+    Object.entries(data).forEach(([key, value]) => body.append(key, value));
     return this.setAccount(await accountRequest(role, 'register', body));
   },
 

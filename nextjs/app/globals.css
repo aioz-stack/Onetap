@@ -1054,6 +1054,23 @@ button.topnav__item:hover, a.topnav__item:hover, .topnav__follow a:hover { color
 .application h1 { font-size: 24px; font-weight: 800; letter-spacing: -.3px; }
 .application__status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .application__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Customer Approval: the store-wide notice for customers who aren't approved, and the admin review. */
+.approval-banner { border-bottom: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 14px; }
+.approval-banner__row { display: flex; align-items: center; gap: 12px; padding-block: 10px; }
+.approval-banner__row > svg { flex: none; width: 20px; height: 20px; color: var(--link); }
+.approval-banner__row p { flex: 1; margin: 0; }
+.approval-banner__row .btn { flex: none; }
+.approval-banner--rejected { border-left: 4px solid var(--sale); }
+.approval-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 14px; }
+.valid-id { display: flex; flex-direction: column; gap: 10px; }
+.valid-id img { display: block; width: 100%; max-width: 480px; max-height: 340px; object-fit: contain; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.valid-id__number { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; letter-spacing: .5px; }
+.check { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; cursor: pointer; }
+.check input { width: 18px; height: 18px; margin-top: 1px; flex: none; accent-color: var(--primary); }
+@media (max-width: 760px) {
+  .approval-banner__row { flex-wrap: wrap; }
+  .approval-banner__row .btn { width: 100%; }
+}
 .application__docs { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 
 /* Checkout and My Purchases */

@@ -58,7 +58,8 @@ export function openCustomerLogin() {
           onSubmit={async ({ identifier, password }) => {
             const user = await Auth.login('customer', identifier, password);
             Modal.close();
-            toast(`Welcome back, ${user.firstName}!`, 'success');
+            if (user.approvalStatus === 'approved') toast(`Welcome back, ${user.firstName}!`, 'success');
+            else toast(user.approvalStatus === 'rejected' ? 'Your registration was not approved. See the reason at the top of the page.' : 'Welcome back! Your account is still waiting for approval.');
           }}
         />
         <p className="form-switch">Don&apos;t have an account? <button className="link" type="button" onClick={openCustomerSignup}>Sign Up</button></p>
@@ -77,10 +78,19 @@ export function openCustomerSignup() {
           id="signup-form"
           onSubmit={async (data) => {
             const user = await Auth.register('customer', data);
-            Modal.close();
-            toast(`Welcome to Onetap, ${user.firstName}!`, 'success');
+            Modal.open({
+              title: 'Registration received',
+              content: (
+                <div className="assistant-form">
+                  <p>Thanks, {user.firstName}. Your account is <strong>waiting for approval</strong>.</p>
+                  <p className="muted">An administrator checks your details and valid ID first. You can browse and fill your cart meanwhile, and you&apos;ll get a notification as soon as you can check out.</p>
+                  <button className="btn btn--primary btn--block" type="button" onClick={() => Modal.close()}>Start Browsing</button>
+                </div>
+              ),
+            });
           }}
         >
+          <p className="muted">New accounts are checked by our team before they can buy. Have a valid government ID ready.</p>
           <Sections schema={CUSTOMER_SCHEMA} prefix="signup" />
           <p className="form-error" role="alert" />
           <button className="btn btn--primary btn--block" type="submit">Sign Up</button>
