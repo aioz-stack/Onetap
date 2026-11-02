@@ -18,6 +18,8 @@
 
 import { randomBytes, randomUUID } from 'node:crypto';
 import { audit } from './admin';
+import { decrypt, encrypt } from './crypto';
+import { accountForPayout } from './payoutAccounts';
 import { backfill as backfillCollections } from './collections';
 import { getDb } from './db';
 import { ApiError } from './errors';
@@ -30,7 +32,6 @@ const PH = 8 * 60 * 60 * 1000;
 const COD = 'Cash on Delivery';
 const PAGE_SIZE = 20;
 const MIN_PAYOUT = 100;
-export const PAYOUT_METHODS = ['Bank transfer', 'GCash', 'Maya'];
 const OPEN_PAYOUT = ['pending', 'processing'];
 
 const db = () => getDb();
@@ -183,9 +184,11 @@ function payoutsOf(seller) {
 }
 
 const maskAccount = (number) => (number.length > 4 ? `•••• ${number.slice(-4)}` : number);
+// Payouts since saved accounts keep the number encrypted. Older ones kept it as typed.
+const payoutNumber = (stored) => (stored.startsWith('enc:') ? decrypt(stored.slice(4)) : stored);
 const toPayout = (row, full = false) => ({
   id: row.id, reference: row.reference, amount: money(row.amount), method: row.method, provider: row.provider, accountName: row.account_name,
-  accountNumber: full ? row.account_number : maskAccount(row.account_number), status: row.status, note: row.note, payoutReference: row.payout_reference,
+  accountNumber: full ? payoutNumber(row.account_number) : maskAccount(payoutNumber(row.account_number)), status: row.status, note: row.note, payoutReference: row.payout_reference,
   requestedAt: row.requested_at, processingAt: row.processing_at, completedAt: row.completed_at, rejectedAt: row.rejected_at, processedBy: full ? row.processed_by : undefined,
 });
 
@@ -286,7 +289,6 @@ export function incomeOverview(seller) {
     trend: Object.values(daily),
     payouts: payouts.slice(0, 10).map((row) => toPayout(row)),
     minPayout: MIN_PAYOUT,
-    methods: PAYOUT_METHODS,
   };
 }
 
@@ -354,27 +356,17 @@ export function incomeRecord(seller, orderId) {
   return record;
 }
 
-// Payouts. One request can be open at a time, and it can't be more than the available balance.
+// Payouts. One request can be open at a time, it can't be more than the available balance, and it
+// goes to one of the seller's verified saved accounts (payoutAccounts.js).
 function readPayout(input) {
-  const errors = {};
   const amount = money(input.amount);
-  const method = PAYOUT_METHODS.includes(input.method) ? input.method : '';
-  const text = (value, max) => String(value ?? '').trim().slice(0, max);
-  const provider = text(input.provider, 60);
-  const accountName = text(input.accountName, 100);
-  const accountNumber = text(input.accountNumber, 40).replace(/\s+/g, '');
-  if (!(amount >= MIN_PAYOUT)) errors.amount = `Withdraw at least ${php(MIN_PAYOUT)}.`;
-  if (!method) errors.method = 'Choose where to send the money.';
-  if (method === 'Bank transfer' && provider.length < 2) errors.provider = 'Enter the bank name.';
-  if (accountName.length < 3) errors.accountName = 'Enter the account name.';
-  const digits = method === 'Bank transfer' ? /^\d{6,20}$/ : /^(09\d{9}|\+639\d{9})$/;
-  if (!digits.test(accountNumber)) errors.accountNumber = method === 'Bank transfer' ? 'Enter the account number, 6 to 20 digits.' : 'Enter the mobile number for this wallet, like 09171234567.';
-  if (Object.keys(errors).length) throw new ApiError(422, 'Check the highlighted fields.', errors);
-  return { amount, method, provider: method === 'Bank transfer' ? provider : method, accountName, accountNumber };
+  if (!(amount >= MIN_PAYOUT)) throw new ApiError(422, 'Check the highlighted fields.', { amount: `Withdraw at least ${php(MIN_PAYOUT)}.` });
+  return { amount };
 }
 
 export function requestPayout(seller, input) {
   const payout = readPayout(input || {});
+  const account = accountForPayout(seller, input?.accountId);
   const database = db();
   database.exec('BEGIN IMMEDIATE');
   try {
@@ -384,10 +376,11 @@ export function requestPayout(seller, input) {
       throw new ApiError(409, 'You already have a payout in progress. You can request another once it is done.');
     }
     const reference = `PO-${randomBytes(4).toString('hex').toUpperCase()}`;
-    database.prepare(`INSERT INTO seller_payouts (id, reference, seller, amount, method, provider, account_name, account_number, status, requested_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`).run(randomUUID(), reference, seller, payout.amount, payout.method, payout.provider, payout.accountName, payout.accountNumber, now());
+    // A copy of where it goes, so later edits to the saved account never change a payout. The number stays encrypted.
+    database.prepare(`INSERT INTO seller_payouts (id, reference, seller, amount, method, provider, account_name, account_number, account_id, status, requested_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`).run(randomUUID(), reference, seller, payout.amount, account.kind === 'bank' ? 'Bank transfer' : 'E-wallet', account.provider, account.holderName, `enc:${encrypt(account.number)}`, account.id, now());
     notifyAdmins('cod', 'Seller payout requested', `${seller} asked to withdraw ${php(payout.amount)} (${reference}).`, '/admin/payouts?status=pending');
-    audit({ username: seller, adminRole: 'seller' }, 'payout.requested', 'payout', reference, { amount: payout.amount, method: payout.method });
+    audit({ username: seller, adminRole: 'seller' }, 'payout.requested', 'payout', reference, { amount: payout.amount, account: account.id });
     database.exec('COMMIT');
     return { reference };
   } catch (err) {
@@ -417,7 +410,7 @@ export function listPayouts(params) {
   if (params.get('format') === 'csv') {
     return csvResponse('onetap-seller-payouts.csv', [
       ['Reference', (r) => r.reference], ['Seller', (r) => r.seller], ['Amount', (r) => r.amount], ['Method', (r) => r.method], ['Provider', (r) => r.provider], ['Account name', (r) => r.accountName],
-      ['Account number', (r) => r.accountNumber], ['Status', (r) => r.status], ['Payout reference', (r) => r.payoutReference], ['Note', (r) => r.note], ['Requested', (r) => isoDate(r.requestedAt)], ['Completed', (r) => isoDate(r.completedAt)],
+      ['Account number', (r) => maskAccount(r.accountNumber)], ['Status', (r) => r.status], ['Payout reference', (r) => r.payoutReference], ['Note', (r) => r.note], ['Requested', (r) => isoDate(r.requestedAt)], ['Completed', (r) => isoDate(r.completedAt)],
     ], rows);
   }
   const page = Math.max(1, Number(params.get('page')) || 1);
@@ -428,8 +421,8 @@ export function listPayouts(params) {
 }
 
 const PAYOUT_ACTIONS = {
-  process: { from: ['pending'], to: 'processing', title: 'Payout processing', body: (p) => `Onetap is sending ${php(p.amount)} (${p.reference}) to your ${p.method}.` },
-  complete: { from: ['processing'], to: 'completed', title: 'Payout sent', body: (p, ref) => `${php(p.amount)} (${p.reference}) was sent to your ${p.method}. Transfer reference ${ref}.` },
+  process: { from: ['pending'], to: 'processing', title: 'Payout processing', body: (p) => `Onetap is sending ${php(p.amount)} (${p.reference}) to your ${p.provider} account ${p.accountNumber}.` },
+  complete: { from: ['processing'], to: 'completed', title: 'Payout sent', body: (p, ref) => `${php(p.amount)} (${p.reference}) was sent to your ${p.provider} account ${p.accountNumber}. Transfer reference ${ref}.` },
   reject: { from: ['pending', 'processing'], to: 'rejected', title: 'Payout not sent', body: (p, note) => `${p.reference} was not sent: ${note} The amount is back in your available balance.` },
 };
 

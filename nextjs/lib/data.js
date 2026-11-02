@@ -69,7 +69,7 @@ export const SELLER_NAV = [
   { label: 'Fulfilment', icon: 'truck', open: true, items: [{ label: 'Fulfilled by Onetap' }] },
   { label: 'Marketing Centre', icon: 'megaphone', open: true, items: [{ label: 'Marketing Centre' }, { label: 'Onetap Ads' }, { label: 'External Traffic Ads' }, { label: 'Affiliate Marketing' }, { label: 'Live & Video' }, { label: 'Discount' }, { label: "My Shop's Flash Deals" }, { label: 'Vouchers' }, { label: 'Campaign' }, { label: 'Best Price on Onetap' }] },
   { label: 'Customer Service', icon: 'chat', open: true, items: [{ label: 'Chat Management', href: '/seller/chat' }, { label: 'Chat AI Assistant' }, { label: 'Review Management' }] },
-  { label: 'Finance', icon: 'wallet', open: true, items: [{ label: 'My Income', href: '/seller/income' }, { label: 'My Balance', href: '/seller/income/payouts' }, { label: 'Bank Accounts' }, { label: 'Seller Loans' }] },
+  { label: 'Finance', icon: 'wallet', open: true, items: [{ label: 'My Income', href: '/seller/income' }, { label: 'My Balance', href: '/seller/income/payouts' }, { label: 'Bank Accounts', href: '/seller/income/accounts' }, { label: 'Seller Loans' }] },
   { label: 'Data', icon: 'chart', open: true, items: [{ label: 'Business Insights' }, { label: 'Account Health' }] },
   { label: 'Shop', icon: 'store', open: true, items: [{ label: 'Shop Information', action: 'shop' }, { label: 'Shop Decoration' }, { label: 'Shop Setting' }, { label: 'Appeal Management' }] },
 ];
@@ -190,3 +190,16 @@ export const I18N = {
     searchPlaceholder: 'Mag-sign up at makakuha ng ₱150 OFF sa unang order | Maghanap ng deals at produkto',
   },
 };
+
+// Supported Philippine banks and e-wallets for seller withdrawals: [id, kind, name, min digits,
+// max digits]. A first-run seed only. After that the list lives in the database and
+// administrators manage it in Payout Accounts.
+export const PAYOUT_PROVIDERS = [
+  ['bdo', 'bank', 'BDO Unibank', 10, 12], ['bpi', 'bank', 'BPI', 10, 10], ['metrobank', 'bank', 'Metrobank', 13, 13],
+  ['landbank', 'bank', 'Land Bank of the Philippines', 10, 10], ['pnb', 'bank', 'Philippine National Bank (PNB)', 12, 12],
+  ['unionbank', 'bank', 'UnionBank', 12, 12], ['securitybank', 'bank', 'Security Bank', 13, 13], ['chinabank', 'bank', 'China Banking Corporation (Chinabank)', 10, 12],
+  ['rcbc', 'bank', 'RCBC', 10, 10], ['eastwest', 'bank', 'EastWest Bank', 12, 12], ['psbank', 'bank', 'Philippine Savings Bank (PSBank)', 12, 12],
+  ['dbp', 'bank', 'Development Bank of the Philippines (DBP)', 10, 10], ['bankcom', 'bank', 'Bank of Commerce', 12, 12],
+  ['aub', 'bank', 'Asia United Bank (AUB)', 12, 12], ['pbb', 'bank', 'Philippine Business Bank (PBB)', 10, 12],
+  ['gcash', 'ewallet', 'GCash', 11, 11], ['maya', 'ewallet', 'Maya', 11, 11],
+];

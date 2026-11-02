@@ -23,6 +23,7 @@ const VIEWS = [
   ['statement', 'Income Statement', '/seller/income/statement'],
   ['details', 'Income Details', '/seller/income/details'],
   ['payouts', 'My Balance', '/seller/income/payouts'],
+  ['accounts', 'Bank Accounts', '/seller/income/accounts'],
 ];
 
 const TEXT = {
@@ -30,6 +31,7 @@ const TEXT = {
   statement: 'A statement of your income for any range of dates.',
   details: 'Every delivered order and what you earned from it.',
   payouts: 'Withdraw your released income and follow your payouts.',
+  accounts: 'The bank accounts and e-wallets your payouts can go to.',
 };
 
 // Philippine dates for the statement's default range and quick picks.
@@ -343,7 +345,7 @@ function PayoutList({ payouts, onCancel }) {
           <span>
             <span><strong>{p.reference}</strong> · {peso(p.amount)}</span>
             <small className="muted">
-              {p.method}{p.method === 'Bank transfer' && ` (${p.provider})`} · {p.accountName} {p.accountNumber} · requested {dateTime(p.requestedAt)}
+              {p.provider} {p.accountNumber} · {p.accountName} · requested {dateTime(p.requestedAt)}
               {p.completedAt && ` · sent ${dateTime(p.completedAt)}, reference ${p.payoutReference}`}
               {p.note && ` · ${p.note}`}
             </small>
@@ -358,13 +360,13 @@ function PayoutList({ payouts, onCancel }) {
   );
 }
 
-function WithdrawForm({ available, min, methods, onDone }) {
-  const [values, setValues] = useState({ amount: String(available), method: methods[0], provider: '', accountName: '', accountNumber: '' });
+// Withdrawals go to one of the seller's verified saved accounts, the default one first.
+function WithdrawForm({ available, min, accounts, onDone }) {
+  const verified = accounts.filter((a) => a.status === 'verified');
+  const [values, setValues] = useState({ amount: String(available), accountId: (verified.find((a) => a.isDefault) || verified[0])?.id || '' });
   const [errors, setErrors] = useState({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const field = (name) => ({ value: values[name], error: errors[name], onChange: (e) => setValues({ ...values, [name]: e.target.value }) });
-  const bank = values.method === 'Bank transfer';
 
   async function submit(e) {
     e.preventDefault();
@@ -382,27 +384,199 @@ function WithdrawForm({ available, min, methods, onDone }) {
     }
   }
 
+  if (!verified.length) {
+    return (
+      <div className="assistant-form">
+        <p>You need a verified bank or e-wallet account to withdraw.</p>
+        <p className="muted">{accounts.length ? 'Your saved accounts are still waiting for verification by Onetap.' : 'Add one in Bank Accounts. Onetap verifies it before money can go to it.'}</p>
+        <Link className="btn btn--primary btn--block" href="/seller/income/accounts" onClick={() => Modal.close()}>Go to Bank Accounts</Link>
+      </div>
+    );
+  }
+
   return (
     <form className="assistant-form" onSubmit={submit} noValidate>
       <p className="muted">Available to withdraw: <strong>{peso(available)}</strong>. The minimum is {peso(min)}.</p>
-      <TextField id="payout-amount" label="Amount (₱)" inputMode="decimal" required {...field('amount')} />
-      <div className="field">
-        <label htmlFor="payout-method">Send to</label>
-        <select id="payout-method" value={values.method} onChange={(e) => setValues({ ...values, method: e.target.value })}>
-          {methods.map((m) => <option key={m}>{m}</option>)}
-        </select>
-      </div>
-      {bank && <TextField id="payout-provider" label="Bank name" required {...field('provider')} />}
-      <TextField id="payout-name" label="Account name" autoComplete="name" required {...field('accountName')} />
-      <TextField id="payout-number" label={bank ? 'Account number' : `${values.method} mobile number`} inputMode="numeric" required hint={bank ? '6 to 20 digits.' : 'Like 09171234567.'} {...field('accountNumber')} />
+      <TextField id="payout-amount" label="Amount (₱)" inputMode="decimal" required value={values.amount} error={errors.amount} onChange={(e) => setValues({ ...values, amount: e.target.value })} />
+      <fieldset className="choice payout-accounts">
+        <legend>Send to</legend>
+        {verified.map((a) => (
+          <label key={a.id} className="payout-choice">
+            <input type="radio" name="accountId" value={a.id} checked={values.accountId === a.id} onChange={() => setValues({ ...values, accountId: a.id })} />
+            <span><strong>{a.provider}</strong> {a.number}{a.isDefault && <span className="order-badge order-badge--info">Default</span>}<small className="muted">{a.holderName}{a.accountType && ` · ${a.accountType}`}</small></span>
+          </label>
+        ))}
+        {errors.accountId && <small className="field__error">{errors.accountId}</small>}
+      </fieldset>
+      {accounts.length > verified.length && <p className="muted">Accounts still waiting for verification aren&apos;t shown.</p>}
       {error && !Object.keys(errors).length && <p className="form-error" role="alert">{error}</p>}
       <button className="btn btn--primary btn--block" type="submit" disabled={busy}>{busy ? 'Requesting…' : 'Request Payout'}</button>
     </form>
   );
 }
 
+const ACCOUNT_STATUS = {
+  pending: { label: 'Waiting for Verification', tone: 'warn' },
+  verified: { label: 'Verified', tone: 'ok' },
+  rejected: { label: 'Not Verified', tone: 'danger' },
+};
+
+// Add or edit a saved account. The provider list follows the account type. Editing never shows
+// the saved number: a new one replaces it, and a blank field keeps it.
+function AccountForm({ setup, account, onSaved }) {
+  const [values, setValues] = useState({
+    kind: account?.kind || 'bank', providerId: account?.providerId || '', holderName: account?.holderName || '', accountType: account?.accountType || setup.bankAccountTypes[0], number: '',
+  });
+  const [errors, setErrors] = useState({});
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const providers = setup.providers.filter((p) => p.kind === values.kind);
+  const chosen = providers.find((p) => p.id === values.providerId);
+  const bank = values.kind === 'bank';
+  const set = (patch) => setValues((current) => ({ ...current, ...patch }));
+  const digits = chosen ? (chosen.minDigits === chosen.maxDigits ? `${chosen.minDigits} digits` : `${chosen.minDigits} to ${chosen.maxDigits} digits`) : '';
+
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    setErrors({});
+    try {
+      const result = account
+        ? await send(`/api/seller/payout-accounts/${account.id}`, json('PATCH', values))
+        : await send('/api/seller/payout-accounts', json('POST', values));
+      Modal.close();
+      toast(account ? (result.reverify ? 'Account updated. Onetap will verify it again.' : 'Account updated.') : 'Account saved. Onetap will verify it before you can withdraw to it.', 'success');
+      onSaved();
+    } catch (err) {
+      setErrors(err.fields || {});
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="assistant-form" onSubmit={submit} noValidate>
+      <div className="field">
+        <label htmlFor="account-kind">Account Type</label>
+        <select id="account-kind" value={values.kind} disabled={Boolean(account)} onChange={(e) => set({ kind: e.target.value, providerId: '', number: '' })} aria-invalid={Boolean(errors.kind)}>
+          {Object.entries(setup.kinds).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </select>
+        {errors.kind && <small className="field__error">{errors.kind}</small>}
+      </div>
+      <div className="field">
+        <label htmlFor="account-provider">{bank ? 'Bank Name' : 'E-Wallet Provider'}</label>
+        <select id="account-provider" value={values.providerId} onChange={(e) => set({ providerId: e.target.value })} aria-invalid={Boolean(errors.providerId)} required>
+          <option value="">{bank ? 'Choose a bank' : 'Choose an e-wallet'}</option>
+          {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        {errors.providerId && <small className="field__error">{errors.providerId}</small>}
+      </div>
+      <TextField id="account-holder" label="Account Holder Name" autoComplete="name" required value={values.holderName} error={errors.holderName} hint="Exactly as the bank or wallet shows it." onChange={(e) => set({ holderName: e.target.value })} />
+      {bank && (
+        <div className="field">
+          <label htmlFor="account-type">Bank Account Type</label>
+          <select id="account-type" value={values.accountType} onChange={(e) => set({ accountType: e.target.value })} aria-invalid={Boolean(errors.accountType)}>
+            {setup.bankAccountTypes.map((t) => <option key={t}>{t}</option>)}
+          </select>
+          {errors.accountType && <small className="field__error">{errors.accountType}</small>}
+        </div>
+      )}
+      <TextField
+        id="account-number"
+        label={bank ? 'Account Number' : 'Registered Mobile Number'}
+        inputMode={bank ? 'numeric' : 'tel'}
+        autoComplete="off"
+        required={!account}
+        placeholder={account ? `Leave blank to keep ${account.number}` : bank ? '' : '0917 123 4567'}
+        hint={bank ? (digits ? `${chosen.name} account numbers have ${digits}.` : 'Choose your bank first.') : 'The mobile number registered to the wallet.'}
+        value={values.number}
+        error={errors.number}
+        onChange={(e) => set({ number: e.target.value })}
+      />
+      {account && <p className="muted">Changing the provider, number or holder name means Onetap verifies the account again.</p>}
+      {error && !Object.keys(errors).length && <p className="form-error" role="alert">{error}</p>}
+      <button className="btn btn--primary btn--block" type="submit" disabled={busy}>{busy ? 'Saving…' : account ? 'Save Changes' : 'Save Account'}</button>
+    </form>
+  );
+}
+
+function BankAccounts() {
+  const { data, loading, error, reload } = useLoad('/api/seller/payout-accounts');
+  if (!data) return loading ? <div className="skeleton" role="status" aria-label="Loading your accounts" /> : <p className="form-error" role="alert">{error}</p>;
+  const open = (account) => Modal.open({ title: account ? `Edit ${account.provider} ${account.number}` : 'Add a bank or e-wallet account', content: <AccountForm setup={data} account={account} onSaved={reload} /> });
+  const makeDefault = async (a) => {
+    try {
+      await send(`/api/seller/payout-accounts/${a.id}`, json('POST', { action: 'default' }));
+      toast(`${a.provider} ${a.number} is now your default withdrawal account.`, 'success');
+      reload();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+  const remove = (a) => confirmModal({
+    title: `Delete ${a.provider} ${a.number}?`,
+    body: 'You can no longer withdraw to it. Past payouts to it stay in your history.',
+    label: 'Delete Account',
+    danger: true,
+    run: async () => {
+      await send(`/api/seller/payout-accounts/${a.id}`, { method: 'DELETE' });
+      toast('Account deleted.', 'success');
+      reload();
+    },
+  });
+
+  return (
+    <>
+      <section className="panel" aria-labelledby="accounts-title">
+        <div className="panel__head">
+          <h2 id="accounts-title">Saved Accounts</h2>
+          <span className="muted">{data.accounts.length} of {data.max}</span>
+          <button className="btn btn--primary income-head-action" type="button" disabled={data.accounts.length >= data.max} onClick={() => open(null)}>Add Bank Account</button>
+        </div>
+        {data.accounts.length ? (
+          <ul className="payout-account-list">
+            {data.accounts.map((a) => (
+              <li key={a.id} className="payout-account">
+                <span className="payout-account__icon" aria-hidden="true"><Icon name={a.kind === 'bank' ? 'store' : 'wallet'} /></span>
+                <div className="payout-account__main">
+                  <strong>{a.provider}</strong>
+                  <span className="payout-account__number">{a.number}</span>
+                  <small className="muted">{a.holderName} · {a.kindLabel}{a.accountType && ` · ${a.accountType}`}</small>
+                  {a.reviewNote && <small className="field__error">{a.reviewNote}</small>}
+                </div>
+                <div className="payout-account__side">
+                  <span className="payout-account__badges">
+                    {a.isDefault && <span className="order-badge order-badge--info">Default</span>}
+                    <Badge status={ACCOUNT_STATUS[a.status]} />
+                  </span>
+                  <span className="payout-account__actions">
+                    {!a.isDefault && <button className="link" type="button" onClick={() => makeDefault(a)}>Set as Default</button>}
+                    <button className="link" type="button" onClick={() => open(a)}>Edit</button>
+                    <button className="link link--danger" type="button" onClick={() => remove(a)}>Delete</button>
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="muted">No accounts yet. Add a bank account or e-wallet to withdraw your released income.</p>}
+      </section>
+      <section className="panel income-explainer">
+        <h2 className="sr-only">About saved accounts</h2>
+        <ul>
+          <li>Onetap verifies each account before money can go to it. You&apos;ll get a notification when it&apos;s done.</li>
+          <li>Your default account is chosen first when you withdraw. Only verified accounts can receive payouts.</li>
+          <li>Account numbers are stored encrypted, and only the last four digits are ever shown.</li>
+          <li>An account can only be registered once on Onetap.</li>
+        </ul>
+      </section>
+    </>
+  );
+}
+
 function Payouts() {
   const { data, loading, error, reload } = useLoad('/api/seller/income');
+  const accounts = useLoad('/api/seller/payout-accounts');
   const [all, setAll] = useState(null);
   const loadAll = useCallback(() => send('/api/seller/income/payouts').then((body) => setAll(body.payouts)).catch(() => {}), []);
   useEffect(() => {
@@ -437,7 +611,7 @@ function Payouts() {
           className="btn btn--primary"
           type="button"
           disabled={!canWithdraw}
-          onClick={() => Modal.open({ title: 'Withdraw your balance', content: <WithdrawForm available={balance.available} min={data.minPayout} methods={data.methods} onDone={done} /> })}
+          onClick={() => Modal.open({ title: 'Withdraw your balance', content: <WithdrawForm available={balance.available} min={data.minPayout} accounts={accounts.data?.accounts || []} onDone={done} /> })}
         >
           Withdraw
         </button>
@@ -472,6 +646,7 @@ export function SellerIncome({ view, initial = {} }) {
       {view === 'statement' && <Statement />}
       {view === 'details' && <Details initial={initial} />}
       {view === 'payouts' && <Payouts />}
+      {view === 'accounts' && <BankAccounts />}
     </div>
   );
 }

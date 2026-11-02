@@ -55,7 +55,7 @@ export function AdminPayouts({ initial }) {
   const actions = (p) => (
     <span className="order-card__actions">
       {p.status === 'pending' && (
-        <button className="btn-mini btn-mini--primary" type="button" onClick={() => confirmModal({ title: `Process ${p.reference}`, body: `Send ${peso(p.amount)} to ${p.accountName}, ${p.method}${p.method === 'Bank transfer' ? ` (${p.provider})` : ''} ${p.accountNumber}. The seller is told it's on its way.`, label: 'Start Processing', run: () => act(p, 'process', {}, 'Marked as processing. The seller was told.') })}>Process</button>
+        <button className="btn-mini btn-mini--primary" type="button" onClick={() => confirmModal({ title: `Process ${p.reference}`, body: `Send ${peso(p.amount)} to ${p.accountName}, ${p.provider} ${p.accountNumber}. The seller is told it's on its way.`, label: 'Start Processing', run: () => act(p, 'process', {}, 'Marked as processing. The seller was told.') })}>Process</button>
       )}
       {p.status === 'processing' && (
         <button className="btn-mini btn-mini--primary" type="button" onClick={() => Modal.open({ title: `Complete ${p.reference}`, content: <NoteForm label="Transfer reference" field="reference" hint={`From the bank or wallet, after sending ${peso(p.amount)}.`} submit="Mark as Sent" onSubmit={(reference) => act(p, 'complete', { reference }, 'Payout completed. The seller was told.')} /> })}>Mark Sent</button>
@@ -85,7 +85,7 @@ export function AdminPayouts({ initial }) {
           { label: 'Reference', render: (row) => <strong>{row.reference}</strong> },
           { label: 'Seller', render: (row) => row.seller },
           { label: 'Amount', render: (row) => peso(row.amount) },
-          { label: 'Send to', render: (row) => <>{row.method}{row.method === 'Bank transfer' && ` · ${row.provider}`}<small className="muted"> {row.accountName} · {row.accountNumber}</small></> },
+          { label: 'Send to', render: (row) => <>{row.provider}<small className="muted"> {row.method} · {row.accountName} · {row.accountNumber}</small></> },
           { label: 'Status', render: (row) => <><Badge status={PAYOUT_STATUS[row.status]} />{row.payoutReference && <small className="muted"> {row.payoutReference}</small>}{row.note && <small className="muted"> {row.note}</small>}</> },
           { label: 'Requested', render: (row) => dateTime(row.requestedAt) },
           { label: 'Actions', render: actions },

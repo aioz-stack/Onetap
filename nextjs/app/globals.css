@@ -1129,6 +1129,30 @@ button.topnav__item:hover, a.topnav__item:hover, .topnav__follow a:hover { color
   .income-controls__spacer { display: none; }
   .income-page .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* Bank Accounts and choosing one to withdraw to */
+.income-head-action { margin-left: auto; }
+.payout-account-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.payout-account { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.payout-account:last-child { border-bottom: 0; }
+.payout-account__icon { display: inline-grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 10px; background: var(--surface-2); color: var(--link); }
+.payout-account__icon svg { width: 20px; height: 20px; }
+.payout-account__main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.payout-account__number { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; letter-spacing: .5px; }
+.payout-account__side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.payout-account__badges, .payout-account__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 12px; font-size: 14px; }
+.link--danger { color: var(--danger); }
+.payout-accounts { flex-direction: column; gap: 8px; }
+.payout-choice { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+.payout-choice:has(input:checked) { border-color: var(--link); background: var(--surface-2); }
+.payout-choice input { margin-top: 3px; accent-color: var(--primary); }
+.payout-choice > span { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.payout-choice small { flex-basis: 100%; }
+@media (max-width: 600px) {
+  .payout-account { flex-wrap: wrap; }
+  .payout-account__side { flex-basis: 100%; flex-direction: row; justify-content: space-between; align-items: center; padding-left: 52px; }
+  .income-head-action { width: 100%; margin-left: 0; }
+}
+
 /* The Income Statement prints on its own, without the Seller Centre frame. */
 @media print {
   .seller-bar, .seller-nav, .income-nav, .income-controls, .admin-head, .chat-launcher, .chat, .toasts, .skip-link { display: none !important; }

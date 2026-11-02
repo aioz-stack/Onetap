@@ -20,6 +20,7 @@ const NAV = [
   { label: 'COD Monitoring', href: '/admin/cod', icon: 'wallet', permission: 'cod' },
   { label: 'Financial Collections', href: '/admin/collections', icon: 'chart', permission: 'cod' },
   { label: 'Seller Payouts', href: '/admin/payouts', icon: 'wallet', permission: 'cod' },
+  { label: 'Payout Accounts', href: '/admin/payout-accounts', icon: 'shield', permission: 'cod' },
   { label: 'Seller Registration Approval', href: '/admin/sellers', icon: 'store', permission: 'sellers' },
   { label: 'Customer Approval', href: '/admin/customers', icon: 'user', permission: 'customers' },
   { label: 'Product Listings', href: '/admin/products', icon: 'shield', permission: 'products' },

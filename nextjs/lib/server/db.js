@@ -5,7 +5,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { randomBytes } from 'node:crypto';
-import { LOGISTICS_PARTNERS, SHIPPING_ZONES } from '../data';
+import { LOGISTICS_PARTNERS, PAYOUT_PROVIDERS, SHIPPING_ZONES } from '../data';
 import { encrypt } from './crypto';
 
 const DATA_DIR = process.env.ONETAP_DATA_DIR || path.join(process.cwd(), 'data');
@@ -658,6 +658,40 @@ export function getDb() {
     );
     CREATE INDEX IF NOT EXISTS seller_payouts_seller ON seller_payouts (seller, requested_at);
     CREATE UNIQUE INDEX IF NOT EXISTS seller_one_payout ON seller_payouts (seller) WHERE status IN ('pending', 'processing');
+    -- Supported banks and e-wallets, managed by administrators after the first run.
+    CREATE TABLE IF NOT EXISTS payout_providers (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      name TEXT NOT NULL,
+      min_digits INTEGER NOT NULL,
+      max_digits INTEGER NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      sort INTEGER NOT NULL DEFAULT 100,
+      created_at INTEGER NOT NULL
+    );
+    -- Sellers' withdrawal accounts. The number is encrypted, with an HMAC to find duplicates.
+    CREATE TABLE IF NOT EXISTS seller_payout_accounts (
+      id TEXT PRIMARY KEY,
+      seller TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      provider_id TEXT NOT NULL,
+      holder_name TEXT NOT NULL,
+      account_type TEXT NOT NULL DEFAULT '',
+      number_enc TEXT NOT NULL,
+      number_hash TEXT NOT NULL,
+      last4 TEXT NOT NULL,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL,
+      review_note TEXT NOT NULL DEFAULT '',
+      reviewed_by TEXT NOT NULL DEFAULT '',
+      reviewed_at INTEGER,
+      deleted_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS seller_payout_accounts_seller ON seller_payout_accounts (seller);
+    CREATE UNIQUE INDEX IF NOT EXISTS payout_account_unique ON seller_payout_accounts (provider_id, number_hash) WHERE deleted_at IS NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS payout_account_one_default ON seller_payout_accounts (seller) WHERE is_default = 1 AND deleted_at IS NULL;
     CREATE TABLE IF NOT EXISTS admin_notification_reads (
       username TEXT PRIMARY KEY COLLATE NOCASE,
       last_id INTEGER NOT NULL
@@ -667,6 +701,11 @@ export function getDb() {
   // Products no longer wait for approval, so anything still waiting goes on sale.
   database.exec("UPDATE products SET status = 'live' WHERE status = 'review'");
   seedPartners(database);
+  // Supported banks and e-wallets, once. Administrators manage the list after that.
+  const addProvider = database.prepare('INSERT OR IGNORE INTO payout_providers (id, kind, name, min_digits, max_digits, active, sort, created_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)');
+  PAYOUT_PROVIDERS.forEach(([id, kind, name, min, max], i) => addProvider.run(id, kind, name, min, max, i, Date.now()));
+  // Which saved account a payout went to. Payouts from before saved accounts have none.
+  addColumns(database, 'seller_payouts', { account_id: "TEXT NOT NULL DEFAULT ''" });
   moveToServiceArea(database);
   return database;
 }
