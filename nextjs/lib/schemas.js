@@ -15,6 +15,13 @@ const ACCOUNT_SECTION = {
   ],
 };
 
+// Customers verify their mobile number with a code texted to it, at sign-up and when they change it.
+const MOBILE_FIELD = {
+  name: 'contact', label: 'Mobile Number', type: 'mobile-otp', autocomplete: 'tel', inputmode: 'tel', placeholder: '0917 123 4567',
+  pattern: '(\\+?63[ \\-]?|0)9[0-9]{2}[ \\-]?[0-9]{3}[ \\-]?[0-9]{4}', hint: 'A Philippine mobile number. We text it a 6-digit code to verify it.',
+};
+const CUSTOMER_ACCOUNT_SECTION = { ...ACCOUNT_SECTION, fields: [...ACCOUNT_SECTION.fields.slice(0, 3), { ...MOBILE_FIELD, purpose: 'register' }] };
+
 const STORE_SECTION = {
   legend: 'Store Details',
   fields: [{ name: 'shopName', label: 'Shop Name', autocomplete: 'organization', minlength: 3, maxlength: 60, wide: true }],
@@ -89,7 +96,7 @@ export const VALID_ID = { name: 'validId', label: 'Valid ID', type: 'file', acce
 
 const IDENTITY_SECTION = { legend: 'Identity Verification', fields: [VALID_ID, { ...ID_NUMBER, wide: true }] };
 
-export const CUSTOMER_SCHEMA = [ACCOUNT_SECTION, PERSONAL_SECTION, addressSection('Complete Address', 'City / Municipality'), IDENTITY_SECTION];
+export const CUSTOMER_SCHEMA = [CUSTOMER_ACCOUNT_SECTION, PERSONAL_SECTION, addressSection('Complete Address', 'City / Municipality'), IDENTITY_SECTION];
 
 // A rejected customer applies again with a new photo of their ID and its number.
 export const CUSTOMER_RESUBMIT_SCHEMA = [{ fields: [VALID_ID, { ...ID_NUMBER, wide: true }] }];
@@ -97,7 +104,7 @@ export const CUSTOMER_RESUBMIT_SCHEMA = [{ fields: [VALID_ID, { ...ID_NUMBER, wi
 // What a customer can edit in My Profile. The username can't change. Changing the name sends the
 // account for approval again, because it must match the ID.
 export const CUSTOMER_PROFILE_SECTIONS = [
-  { legend: 'Contact', fields: [ACCOUNT_SECTION.fields[2], ACCOUNT_SECTION.fields[3]] },
+  { legend: 'Contact', fields: [ACCOUNT_SECTION.fields[2], { ...MOBILE_FIELD, purpose: 'profile', hint: 'A Philippine mobile number. A new number needs a 6-digit code texted to it.' }] },
   PERSONAL_SECTION,
   addressSection('Complete Address', 'City / Municipality'),
 ];

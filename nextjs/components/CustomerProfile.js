@@ -15,6 +15,10 @@ import { Auth, FieldError, useStored } from '@/lib/store';
 import { Modal, toast } from '@/lib/ui';
 
 const NAME_FIELDS = ['firstName', 'middleName', 'lastName', 'suffix'];
+const mobileOf = (value) => {
+  const match = String(value ?? '').replace(/[\s()-]/g, '').match(/^(?:\+?63|0)(9\d{9})$/);
+  return match ? `0${match[1]}` : String(value ?? '').trim();
+};
 
 async function request(path, options = {}) {
   const response = await fetch(`/api/customer/profile${path}`, options).catch(() => null);
@@ -135,7 +139,7 @@ export default function CustomerProfile() {
   async function save(data) {
     const next = await request('', json('PATCH', data));
     saved(next);
-    toast(next.reviewing ? 'Changes saved. Your account is Pending Verification for your new name.' : 'Changes saved.', 'success');
+    toast(next.reviewing ? 'Changes saved. Your account is Pending Verification for your new name.' : next.contactVerified ? 'Changes saved. Your new mobile number is verified.' : 'Changes saved.', 'success');
   }
 
   if (loading && !account) return <section className="container profile"><div className="skeleton" role="status" aria-label="Loading your profile" /></section>;
@@ -179,6 +183,8 @@ export default function CustomerProfile() {
               id="profile-form"
               key={`${account.email}|${JSON.stringify(profile)}`}
               onSubmit={async (data) => {
+                // A new mobile number must be verified by code before it is saved.
+                if (mobileOf(data.contact) !== mobileOf(profile.contact) && !data.phoneToken) throw new FieldError('contact', 'Verify your new mobile number with the code we text you.');
                 const renamed = NAME_FIELDS.some((field) => (data[field] || '').trim() !== (profile[field] || ''));
                 if (renamed && approval.status !== 'pending') {
                   confirmModal({

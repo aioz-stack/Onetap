@@ -14,6 +14,7 @@ import { getDb, UPLOAD_DIR } from './db';
 import { ApiError } from './errors';
 import { csvResponse, dateRange, isoDate, listQuery, search } from './lists';
 import { notifyAdmins, notifyCustomer } from './notifications';
+import { mobileTaken, normalizeMobile, useVerifiedMobile } from './phoneVerification';
 
 const ID_DIR = path.join(UPLOAD_DIR, '..', 'documents', 'customers');
 const MAX_ID_BYTES = 10 * 1024 * 1024;
@@ -81,6 +82,9 @@ const duplicate = (err) => (/customer_approvals\.id_key|customer_id_number/.test
 export async function registerCustomer(request) {
   const form = await request.formData();
   const input = Object.fromEntries([...form.entries()].filter(([, value]) => typeof value === 'string'));
+  // The mobile number must be verified by code first, and is saved in one format.
+  input.contact = normalizeMobile(input.contact) || input.contact;
+  if (!input.phoneToken) throw invalid('contact', 'Verify your mobile number with the code we text you.');
   const id = readIdNumber(input.idNumber);
   const file = await readValidId(form);
   checkIdFree(id, file);
@@ -89,6 +93,9 @@ export async function registerCustomer(request) {
     // The account, its Pending approval and its ID are saved together.
     return await registerAccount('customer', request, input, (username) => {
       const time = now();
+      if (mobileTaken(input.contact, username)) throw invalid('contact', 'This mobile number is already registered to an account.');
+      const mobile = useVerifiedMobile({ contact: input.contact, purpose: 'register', token: input.phoneToken });
+      db().prepare("UPDATE customers SET profile = json_set(profile, '$.contactVerifiedAt', ?) WHERE username = ?").run(mobile.verifiedAt, username);
       db().prepare(`INSERT INTO customer_approvals (username, status, id_number, id_key, id_name, id_mime, id_size, id_stored, id_hash, submitted_at, updated_at)
         VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(username, id.number, id.key, file.name, file.mime, file.bytes.length, stored, file.hash, time, time);
       record(username, 'submitted', username);
@@ -182,12 +189,20 @@ export function updateProfile(username, input) {
     throw new ApiError(409, 'An account with this email already exists.', { email: 'An account with this email already exists.' });
   }
   const next = { ...profile, ...Object.fromEntries(EDITABLE.filter((field) => field.name !== 'email').map(({ name }) => [name, String(input[name] ?? '').trim()])) };
+  // The same number written differently isn't a change. A new one must be verified by code.
+  const mobile = normalizeMobile(next.contact);
+  const contactChanged = mobile !== normalizeMobile(profile.contact);
+  next.contact = contactChanged ? mobile || next.contact : profile.contact;
   const nameChanged = IDENTITY_FIELDS.some((name) => (next[name] || '') !== (profile[name] || ''));
   const changed = email !== row.email || EDITABLE.some(({ name }) => name !== 'email' && next[name] !== (profile[name] ?? ''));
   if (!changed) throw new ApiError(422, 'Nothing has changed yet.');
   const database = db();
   database.exec('BEGIN IMMEDIATE');
   try {
+    if (contactChanged) {
+      if (mobileTaken(mobile, row.username)) throw invalid('contact', 'This mobile number is already registered to an account.');
+      next.contactVerifiedAt = useVerifiedMobile({ contact: mobile, purpose: 'profile', username: row.username, token: input.phoneToken }).verifiedAt;
+    }
     database.prepare('UPDATE customers SET email = ?, profile = ? WHERE username = ?').run(email, JSON.stringify(next), row.username);
     if (nameChanged && row.status !== 'pending') sendForReview(row, 'details_changed', 'Pending Verification', 'Your name must match your valid ID, so our team verifies it again before you can buy.');
     database.exec('COMMIT');
@@ -196,7 +211,7 @@ export function updateProfile(username, input) {
     if (/UNIQUE/.test(err.message)) throw new ApiError(409, 'An account with this email already exists.', { email: 'An account with this email already exists.' });
     throw err;
   }
-  return { ...profileFor(row.username), reviewing: nameChanged && row.status !== 'pending' };
+  return { ...profileFor(row.username), reviewing: nameChanged && row.status !== 'pending', contactVerified: contactChanged };
 }
 
 // Everything My Profile shows. The ID number is the customer's own, so it is shown in full.

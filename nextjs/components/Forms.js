@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Icon from './Icon';
+import MobileOtpField from './MobileOtpField';
 import { toast } from '@/lib/ui';
 
 function PasswordInput(props) {
@@ -26,6 +27,7 @@ function PasswordInput(props) {
 }
 
 function Field({ field, prefix }) {
+  if (field.type === 'mobile-otp') return <MobileOtpField field={field} prefix={prefix} />;
   const id = `${prefix}-${field.name}`;
   const attrs = {
     id,

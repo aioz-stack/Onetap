@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { Form, Sections } from './Forms';
 import Icon from './Icon';
 import { CUSTOMER_SCHEMA, FORGOT_SCHEMA, LOGIN_SCHEMA, SELLER_SCHEMA } from '@/lib/schemas';
-import { Auth, Store, useStored } from '@/lib/store';
+import { Auth, FieldError, Store, useStored } from '@/lib/store';
 import { Modal, toast } from '@/lib/ui';
 
 function LoginForm({ prefix, onSubmit, onForgot }) {
@@ -77,6 +77,7 @@ export function openCustomerSignup() {
         <Form
           id="signup-form"
           onSubmit={async (data) => {
+            if (!data.phoneToken) throw new FieldError('contact', 'Verify your mobile number with the code we text you.');
             const user = await Auth.register('customer', data);
             Modal.open({
               title: 'Pending Verification',

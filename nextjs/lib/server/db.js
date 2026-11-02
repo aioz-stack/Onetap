@@ -599,6 +599,25 @@ export function getDb() {
       link TEXT NOT NULL,
       at INTEGER NOT NULL
     );
+    -- One-time codes for mobile number verification. The code is kept as an HMAC and the token
+    -- that proves it as a SHA-256, never as themselves.
+    CREATE TABLE IF NOT EXISTS phone_verifications (
+      id TEXT PRIMARY KEY,
+      phone TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      username TEXT NOT NULL DEFAULT '',
+      code_hash TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      expires_at INTEGER NOT NULL,
+      sent_at INTEGER NOT NULL,
+      ip TEXT NOT NULL DEFAULT '',
+      verified_at INTEGER,
+      token_hash TEXT NOT NULL DEFAULT '',
+      token_expires_at INTEGER,
+      used_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS phone_verifications_phone ON phone_verifications (phone, sent_at);
+    CREATE INDEX IF NOT EXISTS phone_verifications_ip ON phone_verifications (ip, sent_at);
     CREATE TABLE IF NOT EXISTS admin_notification_reads (
       username TEXT PRIMARY KEY COLLATE NOCASE,
       last_id INTEGER NOT NULL
