@@ -9,7 +9,7 @@ import { Form, Sections } from './Forms';
 import Icon from './Icon';
 import { Badge } from './SellerOrders';
 import { confirmModal } from './SellerProducts';
-import { CUSTOMER_APPROVAL_STATUS } from '@/lib/adminLabels';
+import { VERIFICATION_STATUS } from '@/lib/adminLabels';
 import { CUSTOMER_PASSWORD_SCHEMA, customerIdentitySchema, customerProfileSchema } from '@/lib/schemas';
 import { Auth, FieldError, useStored } from '@/lib/store';
 import { Modal, toast } from '@/lib/ui';
@@ -34,11 +34,44 @@ const json = (method, data) => ({ method, headers: { 'Content-Type': 'applicatio
 const refreshSession = () => fetch('/api/customer/auth/me').then((r) => r.json()).then((body) => body.account && Auth.setAccount(body.account)).catch(() => {});
 
 const STATUS_TEXT = {
-  approved: 'Your identity is verified. You can check out, see your purchases and chat with shops.',
-  pending: 'Our team is checking your details and valid ID. We\'ll notify you when it\'s done.',
-  pendingAgain: 'Our team is checking your updated details. Your orders stay in My Purchases, and checkout opens again once they\'re approved.',
-  rejected: 'Your verification was not approved. Update your valid ID below to apply again.',
+  verified: 'An administrator reviewed and approved your valid ID. You can check out, see your purchases and chat with shops.',
+  pending: 'Your valid ID and ID number were sent for review. An administrator checks them, and you are Verified only once they approve.',
+  pendingAgain: 'Your updated details were sent for review. Your orders stay in My Purchases, and checkout opens again once an administrator approves them.',
+  unverified: 'Your valid ID was not approved, so your account is Unverified. Check the reason, then resubmit a clear photo of your ID and its number.',
 };
+
+const STEPS = ['unverified', 'pending', 'verified'];
+const at = (ms) => new Date(ms).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' });
+
+// Unverified, then Pending Verification, then Verified. Only an administrator's approval reaches the last step.
+function VerificationStatus({ account, onResubmit }) {
+  const { approval } = account;
+  const current = approval.verification;
+  const index = STEPS.indexOf(current);
+  const text = current === 'pending' && approval.verifiedBefore ? STATUS_TEXT.pendingAgain : STATUS_TEXT[current];
+  const when = { pending: approval.submittedAt && `Submitted ${at(approval.submittedAt)}`, verified: approval.decidedAt && `Verified ${at(approval.decidedAt)}`, unverified: approval.decidedAt && `Reviewed ${at(approval.decidedAt)}` }[current];
+  const done = (i) => i < index || current === 'verified';
+  return (
+    <section className={`panel verification verification--${current}`} aria-labelledby="verification-title">
+      <div className="panel__head">
+        <h2 id="verification-title">Account Verification Status</h2>
+        <Badge status={VERIFICATION_STATUS[current]} />
+      </div>
+      <ol className="verification__steps">
+        {STEPS.map((step, i) => (
+          <li key={step} className={done(i) ? 'is-done' : i === index ? 'is-current' : ''} aria-current={i === index ? 'step' : undefined}>
+            <span className="verification__dot" aria-hidden="true">{done(i) ? <Icon name="check" /> : i + 1}</span>
+            <span>{VERIFICATION_STATUS[step].label}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="verification__text">{text}</p>
+      {when && <small className="muted">{when}</small>}
+      {approval.reason && <p className="order-card__note" role="note"><strong>Reason it was not approved:</strong> {approval.reason}</p>}
+      {current === 'unverified' && <button className="btn btn--primary" type="button" onClick={onResubmit}><Icon name="shield" /> Resubmit Valid ID</button>}
+    </section>
+  );
+}
 
 function Fact({ label, children }) {
   return <div><dt>{label}</dt><dd>{children || '—'}</dd></div>;
@@ -53,14 +86,14 @@ function IdentityForm({ account, onSaved }) {
         Object.entries(data).forEach(([key, value]) => body.append(key, value));
         const next = await request('/identity', { method: 'POST', body });
         Modal.close();
-        toast('Valid ID sent. Your account is waiting for approval.', 'success');
+        toast('Valid ID submitted. Your account is Pending Verification.', 'success');
         onSaved(next);
       }}
     >
-      <p className="admin-banner" role="note"><strong>This needs approval again.</strong> Until our team checks your new ID, checkout and shop chat pause. Your existing orders stay in My Purchases.</p>
+      <p className="admin-banner" role="note"><strong>{account.approval.verification === 'verified' ? 'Your account goes back to Pending Verification.' : 'This sends your account for verification.'}</strong> An administrator reviews your ID before you are Verified.{account.approval.verifiedBefore && ' Until then, checkout and shop chat pause. Your existing orders stay in My Purchases.'}</p>
       <Sections schema={customerIdentitySchema(account)} prefix="identity" />
       <p className="form-error" role="alert" />
-      <button className="btn btn--primary btn--block" type="submit">Send for Approval</button>
+      <button className="btn btn--primary btn--block" type="submit">Submit for Verification</button>
     </Form>
   );
 }
@@ -102,7 +135,7 @@ export default function CustomerProfile() {
   async function save(data) {
     const next = await request('', json('PATCH', data));
     saved(next);
-    toast(next.reviewing ? 'Changes saved. Your new name is waiting for approval.' : 'Changes saved.', 'success');
+    toast(next.reviewing ? 'Changes saved. Your account is Pending Verification for your new name.' : 'Changes saved.', 'success');
   }
 
   if (loading && !account) return <section className="container profile"><div className="skeleton" role="status" aria-label="Loading your profile" /></section>;
@@ -110,7 +143,7 @@ export default function CustomerProfile() {
 
   const { profile, approval } = account;
   const name = [profile.firstName, profile.middleName, profile.lastName, profile.suffix].filter(Boolean).join(' ');
-  const statusText = approval.status === 'pending' && approval.verifiedBefore ? STATUS_TEXT.pendingAgain : STATUS_TEXT[approval.status];
+  const openIdentity = () => Modal.open({ title: approval.verification === 'unverified' ? 'Resubmit your valid ID' : 'Update your valid ID', content: <IdentityForm account={account} onSaved={saved} /> });
   const idUrl = `/api/customer/profile/id?v=${account.idFile?.at || 0}`;
 
   return (
@@ -127,12 +160,11 @@ export default function CustomerProfile() {
           <span className="muted">@{account.username} · {account.email}</span>
         </div>
         <div className="profile__status">
-          <Badge status={CUSTOMER_APPROVAL_STATUS[approval.status]} />
-          <small className="muted">Account Verification Status</small>
+          <Badge status={VERIFICATION_STATUS[approval.verification]} />
         </div>
-        <p className="profile__status-text">{statusText}</p>
-        {approval.reason && <p className="order-card__note"><strong>Reason:</strong> {approval.reason}</p>}
       </div>
+
+      <VerificationStatus account={account} onResubmit={openIdentity} />
 
       <div className="profile__grid">
         <div className="profile__main">
@@ -142,7 +174,7 @@ export default function CustomerProfile() {
               <Fact label="Username">{account.username}</Fact>
               <Fact label="Member since">{new Date(account.registeredAt).toLocaleDateString('en-PH', { dateStyle: 'medium', timeZone: 'Asia/Manila' })}</Fact>
             </dl>
-            <p className="muted profile__note">Your username can&apos;t be changed. Changing your name sends your account for approval again, because it must match your valid ID.</p>
+            <p className="muted profile__note">Your username can&apos;t be changed. Changing your name sends your account for verification again, because it must match your valid ID.</p>
             <Form
               id="profile-form"
               key={`${account.email}|${JSON.stringify(profile)}`}
@@ -151,8 +183,8 @@ export default function CustomerProfile() {
                 if (renamed && approval.status !== 'pending') {
                   confirmModal({
                     title: 'Change your name?',
-                    body: 'Your name must match your valid ID, so our team checks it again. Checkout and shop chat pause until it\'s approved. Your orders stay in My Purchases.',
-                    label: 'Save and Send for Approval',
+                    body: 'Your name must match your valid ID, so our team checks it again. Your account goes back to Pending Verification until an administrator approves it, and checkout and shop chat pause meanwhile. Your orders stay in My Purchases.',
+                    label: 'Save and Submit for Verification',
                     run: () => save(data),
                   });
                   return;
@@ -173,7 +205,7 @@ export default function CustomerProfile() {
           <section className="panel" aria-labelledby="profile-identity">
             <div className="panel__head">
               <h2 id="profile-identity">Identity Verification</h2>
-              <Badge status={CUSTOMER_APPROVAL_STATUS[approval.status]} />
+              <Badge status={VERIFICATION_STATUS[approval.verification]} />
             </div>
             {account.idFile ? (
               <a className="profile__id" href={idUrl} target="_blank" rel="noopener" aria-label="Open your valid ID full size in a new tab">
@@ -184,7 +216,7 @@ export default function CustomerProfile() {
               <Fact label="ID Number"><span className="valid-id__number">{account.idNumber}</span></Fact>
               <Fact label="Last submitted">{new Date(approval.submittedAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' })}</Fact>
             </dl>
-            <button className="btn btn--ghost btn--block" type="button" onClick={() => Modal.open({ title: 'Update your valid ID', content: <IdentityForm account={account} onSaved={saved} /> })}>
+            <button className="btn btn--ghost btn--block" type="button" onClick={openIdentity}>
               <Icon name="shield" /> Update Valid ID
             </button>
           </section>

@@ -54,11 +54,21 @@ export const LISTING_STATUS = {
   suspended: { label: 'Suspended', tone: 'danger' },
 };
 
+// Customer Approval as administrators see it. A rejected customer is Unverified to themselves.
 export const CUSTOMER_APPROVAL_STATUS = {
-  pending: { label: 'Pending Approval', tone: 'warn' },
-  approved: { label: 'Approved', tone: 'ok' },
-  rejected: { label: 'Rejected', tone: 'danger' },
+  pending: { label: 'Pending Verification', tone: 'warn' },
+  approved: { label: 'Verified', tone: 'ok' },
+  rejected: { label: 'Rejected · Unverified', tone: 'danger' },
 };
+
+// The customer's own Account Verification Status, from customer_approvals.status. Only an
+// administrator's approval makes a customer Verified: uploading an ID makes them Pending.
+export const VERIFICATION_STATUS = {
+  unverified: { label: 'Unverified', tone: 'danger' },
+  pending: { label: 'Pending Verification', tone: 'warn' },
+  verified: { label: 'Verified', tone: 'ok' },
+};
+export const verificationOf = (approvalStatus) => ({ approved: 'verified', pending: 'pending' }[approvalStatus] || 'unverified');
 
 export const APPLICATION_STATUS = {
   pending: { label: 'Pending Approval', tone: 'warn' },

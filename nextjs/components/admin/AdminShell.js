@@ -4,10 +4,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Icon from '../Icon';
 import { ThemeToggle } from '../Header';
-import { adminFetch, postAdmin, TextField } from './AdminUI';
+import { adminFetch, dateTime, postAdmin, TextField, useRefresh } from './AdminUI';
 import { ADMIN_ROLES, can } from '@/lib/adminRoles';
 import { Modal, toast } from '@/lib/ui';
 
@@ -78,6 +78,7 @@ export function AdminShell({ admin, children }) {
         <span className="seller-bar__title">Admin Console</span>
         <div className="seller-bar__actions">
           <ThemeToggle />
+          <AdminNotifications />
           <button className="seller-bar__logout" type="button" onClick={() => Modal.open({ title: 'Change password', content: <PasswordForm /> })}>{admin.name}<span className="admin-role"> · {ADMIN_ROLES[admin.adminRole].label}</span></button>
           <button className="seller-bar__logout" type="button" onClick={logout}>Log Out</button>
         </div>
@@ -90,6 +91,61 @@ export function AdminShell({ admin, children }) {
         </nav>
         {children}
       </div>
+    </div>
+  );
+}
+
+// Notices for the administrator's role, such as customers waiting for verification. Checks every
+// 15 seconds, and opening the list marks them read.
+function AdminNotifications() {
+  const [items, setItems] = useState([]);
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const unread = items.filter((item) => !item.read).length;
+
+  const load = useCallback(() => adminFetch('/notifications').then((body) => setItems(body.notifications)).catch(() => {}), []);
+  useRefresh(load);
+  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => {
+      if (e.type === 'keydown' ? e.key === 'Escape' : !e.composedPath().some((el) => el.matches?.('.panel-pop, [data-admin-notices]'))) setOpen(false);
+    };
+    document.addEventListener('click', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('click', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, [open]);
+
+  function toggle() {
+    setOpen(!open);
+    if (!open && unread) {
+      postAdmin('/notifications', {}).catch(() => {});
+      setItems(items.map((item) => ({ ...item, read: true })));
+    }
+  }
+
+  return (
+    <div className="popover-wrap">
+      <button className="seller-bar__icon" type="button" data-admin-notices aria-label={`Notifications, ${unread} unread`} aria-expanded={open} aria-controls="admin-notices" onClick={toggle}>
+        <Icon name="bell" />
+        {unread > 0 && <span className="count seller-bar__count" aria-hidden="true">{unread > 99 ? '99+' : unread}</span>}
+      </button>
+      {open && (
+        <div className="popover popover--wide seller-notices panel-pop" id="admin-notices" role="region" aria-label="Notifications">
+          <div className="popover__head"><strong>Notifications</strong></div>
+          {items.map((item) => (
+            <Link className={`notif${item.read ? '' : ' notif--unread'}`} href={item.link} key={item.id} onClick={() => setOpen(false)}>
+              <strong>{item.title}</strong>
+              <span>{item.body}</span>
+              <small>{dateTime(item.at)}</small>
+            </Link>
+          ))}
+          {!items.length && <p className="muted notif">Nothing new yet.</p>}
+        </div>
+      )}
     </div>
   );
 }

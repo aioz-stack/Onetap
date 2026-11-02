@@ -147,7 +147,7 @@ export const Chat = {
     if (!hasSession('customer')) {
       // Signed in but not approved yet: logging in again wouldn't help.
       if (Auth.session('customer')) {
-        toast('You can chat with shops once your account is approved.');
+        toast('You can chat with shops once your account is Verified.');
         return;
       }
       chatState.set((state) => ({ ...state, open: true, role: 'customer', activeId: null, needsLogin: true }));

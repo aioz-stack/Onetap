@@ -301,7 +301,7 @@ function CartView() {
         onClick={() => {
           const customer = Auth.session('customer');
           if (customer && customer.approvalStatus !== 'approved') {
-            toast(customer.approvalStatus === 'rejected' ? 'Your registration was not approved. Send a new ID from the notice at the top of the page.' : 'You can check out once your account is approved. We\'ll notify you.');
+            toast(customer.approvalStatus === 'rejected' ? 'Your account is Unverified. Resubmit your valid ID in My Profile.' : 'You can check out once your account is Verified. We\'ll notify you.');
           } else if (customer) {
             Modal.close();
             router.push('/checkout');
@@ -328,7 +328,7 @@ function claimVouchers() {
     return;
   }
   if (Auth.session('customer').approvalStatus !== 'approved') {
-    toast('You can claim vouchers once your account is approved.');
+    toast('You can claim vouchers once your account is Verified.');
     return;
   }
   if (Store.get('vouchersClaimed')) {

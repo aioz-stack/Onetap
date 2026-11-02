@@ -588,6 +588,22 @@ export function getDb() {
   // When a customer was first approved. It stays set while they are re-verified after changing
   // their ID or name, so they keep their orders but can't buy until approved again.
   addColumns(database, 'customer_approvals', { approved_at: 'INTEGER' });
+  // Notices for administrators. Each is for one permission, and each administrator's read
+  // position is the newest id they have seen.
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS admin_notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      permission TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      link TEXT NOT NULL,
+      at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS admin_notification_reads (
+      username TEXT PRIMARY KEY COLLATE NOCASE,
+      last_id INTEGER NOT NULL
+    );
+  `);
   database.exec("UPDATE customer_approvals SET approved_at = COALESCE(decided_at, submitted_at) WHERE status = 'approved' AND approved_at IS NULL");
   // Products no longer wait for approval, so anything still waiting goes on sale.
   database.exec("UPDATE products SET status = 'live' WHERE status = 'review'");

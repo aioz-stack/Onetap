@@ -45,6 +45,23 @@ export function markRiderNotificationsRead(riderId, id) {
   else getDb().prepare('UPDATE rider_notifications SET read = 1 WHERE rider_id = ?').run(riderId);
 }
 
+// For every administrator whose role has `permission`.
+export function notifyAdmins(permission, title, body, link) {
+  getDb().prepare('INSERT INTO admin_notifications (permission, title, body, link, at) VALUES (?, ?, ?, ?, ?)').run(permission, title, body, link, Date.now());
+}
+
+export function listAdminNotifications(username, permissions) {
+  if (!permissions.length) return [];
+  const lastId = getDb().prepare('SELECT last_id FROM admin_notification_reads WHERE username = ?').get(username)?.last_id || 0;
+  return getDb().prepare(`SELECT * FROM admin_notifications WHERE permission IN (${permissions.map(() => '?').join(', ')}) ORDER BY id DESC LIMIT 30`).all(...permissions)
+    .map(({ id, title, body, link, at }) => ({ id, title, body, link, read: id <= lastId, at }));
+}
+
+export function markAdminNotificationsRead(username) {
+  const { id } = getDb().prepare('SELECT COALESCE(MAX(id), 0) AS id FROM admin_notifications').get();
+  getDb().prepare('INSERT INTO admin_notification_reads (username, last_id) VALUES (?, ?) ON CONFLICT (username) DO UPDATE SET last_id = excluded.last_id').run(username, id);
+}
+
 export function notifyCustomer(customer, title, body, link) {
   getDb().prepare('INSERT INTO customer_notifications (customer, title, body, link, at) VALUES (?, ?, ?, ?, ?)').run(customer, title, body, link, Date.now());
 }

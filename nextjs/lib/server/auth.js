@@ -4,6 +4,7 @@
 import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { cookies } from 'next/headers';
+import { verificationOf } from '../adminLabels';
 import { CUSTOMER_SCHEMA, SELLER_SCHEMA } from '../schemas';
 import { getDb } from './db';
 import { ApiError } from './errors';
@@ -71,7 +72,8 @@ function applicationStatus(username) {
 // `verifiedBefore` means approved once, and now waiting to be re-verified after a change.
 function customerApproval(username) {
   const row = getDb().prepare('SELECT status, reason, approved_at FROM customer_approvals WHERE username = ?').get(username);
-  return { approvalStatus: row?.status || 'pending', approvalReason: row?.status === 'rejected' ? row.reason : '', verifiedBefore: Boolean(row?.approved_at) };
+  const approvalStatus = row?.status || 'pending';
+  return { approvalStatus, verificationStatus: verificationOf(approvalStatus), approvalReason: approvalStatus === 'rejected' ? row.reason : '', verifiedBefore: Boolean(row?.approved_at) };
 }
 
 function toAccount(role, row) {
@@ -140,11 +142,11 @@ export const applicantFrom = (request) => accountFrom('seller', request, 'Log in
 export const customerAccountFrom = (request) => accountFrom('customer', request, 'Log in to your Onetap account first.');
 
 export const CUSTOMER_NOT_APPROVED = {
-  pending: 'Your account is waiting for approval. You can shop once an administrator approves it.',
-  rejected: 'Your registration was not approved. Update your valid ID to apply again.',
+  pending: 'Your account is Pending Verification. You can shop once our team verifies your valid ID.',
+  rejected: 'Your account is Unverified. Resubmit your valid ID in My Profile.',
 };
 
-const REVERIFYING = 'Your updated details are waiting for approval. You can buy and chat with shops again once they are approved.';
+const REVERIFYING = 'Your updated details are Pending Verification. You can buy and chat with shops again once they are verified.';
 
 // For buying and shop chat: only approved customers.
 export function customerFrom(request) {

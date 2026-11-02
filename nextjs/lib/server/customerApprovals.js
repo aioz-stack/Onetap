@@ -6,13 +6,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { verificationOf } from '../adminLabels';
 import { CUSTOMER_PROFILE_SECTIONS, ID_NUMBER } from '../schemas';
 import { audit } from './admin';
 import { checkFields, registerAccount } from './auth';
 import { getDb, UPLOAD_DIR } from './db';
 import { ApiError } from './errors';
 import { csvResponse, dateRange, isoDate, listQuery, search } from './lists';
-import { notifyCustomer } from './notifications';
+import { notifyAdmins, notifyCustomer } from './notifications';
 
 const ID_DIR = path.join(UPLOAD_DIR, '..', 'documents', 'customers');
 const MAX_ID_BYTES = 10 * 1024 * 1024;
@@ -91,7 +92,8 @@ export async function registerCustomer(request) {
       db().prepare(`INSERT INTO customer_approvals (username, status, id_number, id_key, id_name, id_mime, id_size, id_stored, id_hash, submitted_at, updated_at)
         VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(username, id.number, id.key, file.name, file.mime, file.bytes.length, stored, file.hash, time, time);
       record(username, 'submitted', username);
-      notifyCustomer(username, 'Registration received', 'Your account is waiting for approval. We check your valid ID, then you can start shopping.', '/');
+      notifyCustomer(username, 'Pending Verification', 'We received your valid ID. Our team verifies it, then you can start shopping.', '/profile');
+      askAdmins(username, input, 'New customer verification request', 'registered and submitted a valid ID');
     });
   } catch (err) {
     rmSync(path.join(ID_DIR, stored), { force: true });
@@ -119,7 +121,13 @@ export function approvalFor(username) {
   };
 }
 
-// Sends the account back to Pending, for an administrator to check again. Runs inside the caller's transaction.
+// Tells administrators who review customers that one is waiting. Runs inside the caller's transaction.
+function askAdmins(username, profile, title, what) {
+  const name = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || username;
+  notifyAdmins('customers', title, `${name} (@${username}) ${what}. Review it in Customer Approval.`, `/admin/customers?tab=pending&open=${encodeURIComponent(username)}`);
+}
+
+// Sends the account back to Pending Verification, for an administrator to check again. Runs inside the caller's transaction.
 function sendForReview(row, action, title, body, fields = '', values = []) {
   const time = now();
   const changed = db().prepare(`UPDATE customer_approvals SET status = 'pending', reason = ''${fields}, submitted_at = ?, decided_at = NULL, decided_by = '', updated_at = ? WHERE username = ? AND status = ?`)
@@ -127,6 +135,7 @@ function sendForReview(row, action, title, body, fields = '', values = []) {
   if (!changed) throw new ApiError(409, 'Your account has changed. Refresh and try again.');
   record(row.username, action, row.username);
   notifyCustomer(row.username, title, body, '/profile');
+  askAdmins(row.username, JSON.parse(row.profile), 'Customer verification request', action === 'details_changed' ? 'changed their name, which must match their valid ID' : 'submitted a valid ID');
 }
 
 // A customer changes their valid ID: a new photo, a new number, or both. At any stage this sends
@@ -145,7 +154,7 @@ export async function updateIdentity(username, request) {
   database.exec('BEGIN IMMEDIATE');
   try {
     const photo = file ? ', id_name = ?, id_mime = ?, id_size = ?, id_stored = ?, id_hash = ?' : '';
-    sendForReview(row, 'resubmitted', 'Valid ID sent for approval', 'We check your updated ID, then your account is active again.',
+    sendForReview(row, 'resubmitted', 'Pending Verification', 'We received your valid ID. Our team verifies it, then you can shop again.',
       `, id_number = ?, id_key = ?${photo}`, [id.number, id.key, ...(file ? [file.name, file.mime, file.bytes.length, stored, file.hash] : [])]);
     database.exec('COMMIT');
   } catch (err) {
@@ -180,7 +189,7 @@ export function updateProfile(username, input) {
   database.exec('BEGIN IMMEDIATE');
   try {
     database.prepare('UPDATE customers SET email = ?, profile = ? WHERE username = ?').run(email, JSON.stringify(next), row.username);
-    if (nameChanged && row.status !== 'pending') sendForReview(row, 'details_changed', 'Name change sent for approval', 'Your name must match your valid ID, so we check it again before you can buy.');
+    if (nameChanged && row.status !== 'pending') sendForReview(row, 'details_changed', 'Pending Verification', 'Your name must match your valid ID, so our team verifies it again before you can buy.');
     database.exec('COMMIT');
   } catch (err) {
     database.exec('ROLLBACK');
@@ -196,7 +205,7 @@ export function profileFor(username) {
   const profile = JSON.parse(row.profile);
   return {
     username: row.username, email: row.email, profile, registeredAt: row.registered_at,
-    approval: { status: row.status, reason: row.status === 'rejected' ? row.reason : '', submittedAt: row.submitted_at, decidedAt: row.decided_at, verifiedBefore: Boolean(row.approved_at) },
+    approval: { status: row.status, verification: verificationOf(row.status), reason: row.status === 'rejected' ? row.reason : '', submittedAt: row.submitted_at, decidedAt: row.decided_at, verifiedBefore: Boolean(row.approved_at) },
     idNumber: row.id_number, idFile: row.id_stored ? { name: row.id_name, size: row.id_size, at: row.updated_at } : null,
   };
 }
@@ -269,8 +278,8 @@ export function customerApprovalDetail(username) {
 }
 
 const DECISIONS = {
-  approve: { from: ['pending'], status: 'approved', title: 'Your Onetap account is approved', body: () => 'Welcome! You can now check out, see your purchases and chat with shops.' },
-  reject: { from: ['pending'], status: 'rejected', needsReason: true, title: 'Your registration was not approved', body: (reason) => `Reason: ${reason} You can send a new photo of your valid ID to apply again.` },
+  approve: { from: ['pending'], status: 'approved', title: 'Your account is Verified', body: () => 'Your identity is verified. You can now check out, see your purchases and chat with shops.' },
+  reject: { from: ['pending'], status: 'rejected', needsReason: true, title: 'Verification not approved', body: (reason) => `Your account is Unverified. Reason: ${reason} Resubmit your valid ID in My Profile.` },
 };
 
 export function decideCustomer(admin, username, action, reason) {
@@ -287,7 +296,7 @@ export function decideCustomer(admin, username, action, reason) {
       .run(decision.status, decision.needsReason ? text : '', now(), admin.username, now(), ...(decision.status === 'approved' ? [now()] : []), row.username, row.status).changes;
     if (!changed) throw new ApiError(409, 'This registration has changed. Refresh and try again.');
     record(row.username, action, admin.username, text);
-    notifyCustomer(row.username, decision.title, decision.body(text), '/');
+    notifyCustomer(row.username, decision.title, decision.body(text), '/profile');
     audit(admin, `customer.${action}`, 'customer', row.username, { reason: text || undefined });
     database.exec('COMMIT');
   } catch (err) {

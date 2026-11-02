@@ -27,7 +27,7 @@ function useHeaderPanel() {
   useEffect(() => {
     // The path is taken when the click starts, so a button that removes itself (Mark as read) still counts as inside.
     function onClick(e) {
-      if (!e.composedPath().some((el) => el.matches?.('.rider-pop, [data-rider-toggle]'))) setPanel(null);
+      if (!e.composedPath().some((el) => el.matches?.('.panel-pop, [data-rider-toggle]'))) setPanel(null);
     }
     function onKeyDown(e) {
       if (e.key !== 'Escape') return;
@@ -95,7 +95,7 @@ function RiderNotifications({ open, close, toggleProps }) {
         {unread > 0 && <span className="count seller-bar__count" aria-hidden="true">{unread > 99 ? '99+' : unread}</span>}
       </button>
       {open && (
-        <div className="popover popover--wide seller-notices rider-pop" id="rider-notices" role="region" aria-label="Notifications">
+        <div className="popover popover--wide seller-notices panel-pop" id="rider-notices" role="region" aria-label="Notifications">
           <div className="popover__head">
             <strong>Notifications</strong>
             {unread > 0 && <button className="link" type="button" onClick={() => markRead()}>Mark all as read</button>}
@@ -163,7 +163,7 @@ function TaskHistory({ open, close, toggleProps }) {
         <Icon name="clock" />
       </button>
       {open && (
-        <div className="popover popover--wide seller-notices rider-pop" id="rider-history" role="region" aria-label="Task history">
+        <div className="popover popover--wide seller-notices panel-pop" id="rider-history" role="region" aria-label="Task history">
           <div className="popover__head">
             <strong>Task History</strong>
             <Link className="link" href="/rider/collections" onClick={close}>Collections</Link>

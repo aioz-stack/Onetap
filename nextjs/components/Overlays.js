@@ -94,7 +94,7 @@ export function CustomerSession() {
         if (body?.account) {
           const before = Auth.session('customer')?.approvalStatus;
           Auth.setAccount(body.account);
-          if (before && before !== 'approved' && body.account.approvalStatus === 'approved') toast('Your account is approved. You can check out now!', 'success');
+          if (before && before !== 'approved' && body.account.approvalStatus === 'approved') toast('Your account is Verified. You can check out now!', 'success');
         } else if (body && Auth.session('customer')) Auth.clearAccount('customer');
       })
       .catch(() => {});
@@ -123,18 +123,18 @@ function ResubmitForm() {
         const account = Auth.session('customer');
         Auth.setAccount({ ...account, approvalStatus: 'pending', approvalReason: '' });
         Modal.close();
-        toast('New ID sent. Your account is waiting for approval again.', 'success');
+        toast('Valid ID submitted. Your account is Pending Verification.', 'success');
       }}
     >
       <p className="muted">Take a clear photo of the front of your ID, with all four corners and the text readable.</p>
       <Sections schema={CUSTOMER_RESUBMIT_SCHEMA} prefix="resubmit" />
       <p className="form-error" role="alert" />
-      <button className="btn btn--primary btn--block" type="submit">Send for Approval</button>
+      <button className="btn btn--primary btn--block" type="submit">Submit for Verification</button>
     </Form>
   );
 }
 
-// Tells a customer who isn't approved yet what's happening, on every store page.
+// Tells a customer who isn't Verified what's happening, on every store page.
 export function CustomerApprovalBanner() {
   const pathname = usePathname();
   const customer = useStored('session.customer');
@@ -147,12 +147,12 @@ export function CustomerApprovalBanner() {
       <div className="container approval-banner__row">
         <Icon name={rejected ? 'shield' : 'clock'} />
         <p>
-          {rejected && <><strong>{again ? 'Your updated details were not approved.' : 'Your registration was not approved.'}</strong> {customer.approvalReason && <>Reason: {customer.approvalReason} </>}Send a new photo of your valid ID to apply again.</>}
-          {!rejected && again && <><strong>Your updated details are waiting for approval.</strong> Your orders stay in My Purchases. Checkout and shop chat open again once our team checks them.</>}
-          {!rejected && !again && <><strong>Your account is waiting for approval.</strong> You can browse and fill your cart. Checkout, My Purchases and shop chat open once our team checks your valid ID.</>}
+          {rejected && <><strong>Your account is Unverified.</strong> {customer.approvalReason && <>Reason: {customer.approvalReason} </>}Resubmit a clear photo of your valid ID for verification.</>}
+          {!rejected && again && <><strong>Your account is Pending Verification.</strong> Your orders stay in My Purchases. Checkout and shop chat open again once an administrator verifies your updated details.</>}
+          {!rejected && !again && <><strong>Your account is Pending Verification.</strong> You can browse and fill your cart. Checkout, My Purchases and shop chat open once an administrator verifies your valid ID.</>}
           {pathname !== '/profile' && <> <Link className="link" href="/profile">View My Profile</Link></>}
         </p>
-        {rejected && <button className="btn btn--primary" type="button" onClick={() => Modal.open({ title: 'Send a new valid ID', content: <ResubmitForm /> })}>Send New ID</button>}
+        {rejected && <button className="btn btn--primary" type="button" onClick={() => Modal.open({ title: 'Resubmit your valid ID', content: <ResubmitForm /> })}>Resubmit Valid ID</button>}
       </div>
     </div>
   );

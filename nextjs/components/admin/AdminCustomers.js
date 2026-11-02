@@ -31,12 +31,12 @@ function RejectForm({ onSubmit }) {
       }}
     >
       <div className="field">
-        <label htmlFor="customer-reason">Why is this registration rejected?</label>
+        <label htmlFor="customer-reason">Why is this verification rejected?</label>
         <textarea id="customer-reason" rows={4} minLength={10} maxLength={500} required aria-invalid={Boolean(error)} aria-describedby="customer-reason-hint" value={reason} onChange={(e) => setReason(e.target.value)} />
-        <small className="field__hint" id="customer-reason-hint">The customer sees this, and can send a new ID. 10 to 500 characters.</small>
+        <small className="field__hint" id="customer-reason-hint">The customer stays Unverified, sees this reason in My Profile and can resubmit. 10 to 500 characters.</small>
         {error && <small className="field__error" role="alert">{error}</small>}
       </div>
-      <button className="btn btn--danger btn--block" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Reject Registration'}</button>
+      <button className="btn btn--danger btn--block" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Reject Verification'}</button>
     </form>
   );
 }
@@ -68,7 +68,7 @@ function CustomerDetail({ username, onChanged }) {
       <div className="approval-head">
         <Badge status={CUSTOMER_APPROVAL_STATUS[status]} />
         {status === 'pending' && customer.verifiedBefore && <span className="order-badge order-badge--info">Re-verification</span>}
-        <span className="muted">Registered {dateTime(customer.registeredAt)}{customer.decidedAt && ` · ${CUSTOMER_APPROVAL_STATUS[status].label.toLowerCase()} ${dateTime(customer.decidedAt)} by ${customer.decidedBy}`}</span>
+        <span className="muted">Registered {dateTime(customer.registeredAt)}{customer.decidedAt && ` · ${status === 'approved' ? 'verified' : 'rejected'} ${dateTime(customer.decidedAt)} by ${customer.decidedBy}`}</span>
       </div>
       {customer.reason && <p className="order-card__note"><strong>Reason:</strong> {customer.reason}</p>}
       <section>
@@ -121,14 +121,14 @@ function CustomerDetail({ username, onChanged }) {
             title={idChecked ? undefined : 'Check the ID first'}
             onClick={() => confirmModal({
               title: `Approve ${customer.username}`,
-              body: 'They can check out, see their purchases and chat with shops straight away.',
-              label: 'Approve Customer',
-              run: () => decide('approve', '', 'Customer approved and notified.'),
+              body: 'Their account becomes Verified. They can check out, see their purchases and chat with shops straight away.',
+              label: 'Approve and Verify',
+              run: () => decide('approve', '', 'Customer verified and notified.'),
             })}
           >
             Approve
           </button>
-          <button className="btn-mini btn-mini--danger" type="button" onClick={() => Modal.open({ title: `Reject ${customer.username}`, content: <RejectForm onSubmit={(reason) => decide('reject', reason, 'Registration rejected. The customer was notified.')} /> })}>Reject</button>
+          <button className="btn-mini btn-mini--danger" type="button" onClick={() => Modal.open({ title: `Reject ${customer.username}`, content: <RejectForm onSubmit={(reason) => decide('reject', reason, 'Verification rejected. The customer is Unverified and was notified.')} /> })}>Reject</button>
         </div>
       )}
       {status === 'pending' && !idChecked && <p className="muted">Tick the ID check to approve.</p>}
@@ -154,14 +154,19 @@ export function AdminCustomers({ initial }) {
   // New registrations show up without a reload.
   useRefresh(list.reload);
   const open = (row) => Modal.open({ title: row.name || row.username, variant: 'wide', content: <CustomerDetail username={row.username} onChanged={list.reload} /> });
+  // A notification links here with ?open=<username>, which opens that customer straight away.
+  useEffect(() => {
+    if (initial.open) open({ username: initial.open });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial.open]);
 
   return (
     <div className="order-page admin-page">
-      <PageHead title="Customer Approval" text="Check new customers' details and valid ID before they can buy." />
+      <PageHead title="Customer Approval" text="Verify customers' details and valid ID. Only your approval makes a customer Verified." />
       <Tabs
         list={list}
         label="Filter registrations"
-        tabs={[['', 'All Customers'], ['pending', 'Pending Approval', counts.pending], ['approved', 'Approved', counts.approved], ['rejected', 'Rejected', counts.rejected]]}
+        tabs={[['', 'All Customers'], ['pending', 'Pending Verification', counts.pending], ['approved', 'Verified', counts.approved], ['rejected', 'Rejected · Unverified', counts.rejected]]}
       />
       <FilterBar list={list} placeholder="Name, username, email, contact or ID number">
         <DateFilter list={list} name="from" label="Registered from" />
