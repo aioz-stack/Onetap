@@ -1,51 +1,37 @@
 // Financial records for delivered orders, written once when the courier confirms delivery. Each
-// keeps three parts apart: the seller's proceeds, the rider (delivery) fee and Onetap's admin
-// fee. Only the admin fee is Onetap's. Prepaid orders are reconciled against their payment
-// record, and COD orders against what the rider collected and where that cash is now.
+// keeps the parts apart: the seller's proceeds, Onetap's admin fee (from the seller), the delivery
+// fee the buyer paid, split into Onetap's logistics fee and the courier's share. Only the admin and
+// logistics fees are Onetap's. Both fees come from Fee Management (fees.js) at that moment. Prepaid
+// orders are reconciled against their payment record, and COD orders against what the rider
+// collected and where that cash is now.
 
-import { audit } from './admin';
 import { getDb } from './db';
-import { ApiError } from './errors';
+import { feesFor } from './fees';
 import { csvResponse, dateRange, equals, isoDate, listQuery, search } from './lists';
 
-const COMMISSION_KEY = 'commission_rate';
-const MAX_COMMISSION = 50;
 const COD = 'Cash on Delivery';
 
 const db = () => getDb();
 const money = (value) => Math.round(value * 100) / 100;
 
-// Onetap's commission on the product total, set by an administrator. Starts at 0%.
-export function commissionRate() {
-  return Number(db().prepare('SELECT value FROM app_settings WHERE key = ?').get(COMMISSION_KEY)?.value) || 0;
-}
-
-export function setCommissionRate(admin, value) {
-  const rate = Number(value);
-  if (value === '' || !Number.isFinite(rate) || rate < 0 || rate > MAX_COMMISSION) throw new ApiError(422, `Enter a rate from 0 to ${MAX_COMMISSION}%.`, { commissionRate: `Enter a rate from 0 to ${MAX_COMMISSION}%.` });
-  const previous = commissionRate();
-  db().prepare('INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value').run(COMMISSION_KEY, String(money(rate)));
-  audit(admin, 'settings.commission_changed', 'setting', COMMISSION_KEY, { from: previous, to: money(rate) });
-  return money(rate);
-}
-
 // Called inside the delivery's transaction, after any COD collection is recorded. The order's
 // ID is the key, so a repeated delivery report can never record it twice.
 export function recordCollection(order, shipment, at) {
-  const rate = commissionRate();
   const productTotal = money(order.subtotal ?? order.items.reduce((sum, item) => sum + item.price * item.qty, 0));
   const riderFee = money(order.shippingFee || 0);
-  const adminFee = money((productTotal * rate) / 100);
+  const fees = feesFor(productTotal, riderFee);
   const cod = order.payment === COD;
   const collected = cod
     ? db().prepare('SELECT collected FROM cod_records WHERE order_id = ?').get(order.id)?.collected ?? order.total
     : order.paidAmount ?? 0;
   const rider = db().prepare("SELECT rider_id FROM rider_assignments WHERE shipment_id = ? AND kind = 'delivery' AND status = 'completed' ORDER BY finished_at DESC LIMIT 1").get(shipment.id);
   db().prepare(`
-    INSERT OR IGNORE INTO collection_records (order_id, seller, shop_name, customer, customer_name, partner_id, partner_name, rider_id, payment_method, product_total, rider_fee, commission_rate, admin_fee, seller_proceeds, total, collected, payment_reference, collected_at, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO collection_records (order_id, seller, shop_name, customer, customer_name, partner_id, partner_name, rider_id, payment_method, product_total, rider_fee, commission_rate, admin_fee, seller_proceeds, total, collected, payment_reference, collected_at, created_at,
+      admin_fee_type, admin_fee_value, logistics_fee, logistics_fee_type, logistics_fee_value, courier_share)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(order.id, order.seller, order.shopName, order.customer, order.buyer.name, shipment.partner_id, shipment.partner_name, rider?.rider_id || '', order.payment,
-    productTotal, riderFee, rate, adminFee, money(productTotal - adminFee), money(order.total), money(collected), cod ? '' : order.paymentReference || '', at, Date.now());
+    productTotal, riderFee, fees.adminFeeType === 'percent' ? fees.adminFeeValue : 0, fees.adminFee, fees.sellerProceeds, money(order.total), money(collected), cod ? '' : order.paymentReference || '', at, Date.now(),
+    fees.adminFeeType, fees.adminFeeValue, fees.logisticsFee, fees.logisticsFeeType, fees.logisticsFeeValue, fees.courierShare);
 }
 
 // Delivered orders from before this existed, recorded with today's commission rate.
@@ -74,7 +60,8 @@ const COLLECTION_LIST = {
 
 const toCollection = (row) => ({
   orderId: row.order_id, seller: row.shop_name, customer: row.customer_name, courier: row.partner_name, rider: row.first_name ? [row.first_name, row.middle_name, row.last_name].filter(Boolean).join(' ') : '',
-  paymentMethod: row.payment_method, productTotal: row.product_total, riderFee: row.rider_fee, adminFee: row.admin_fee, commissionRate: row.commission_rate, sellerProceeds: row.seller_proceeds,
+  paymentMethod: row.payment_method, productTotal: row.product_total, riderFee: row.rider_fee, adminFee: row.admin_fee, commissionRate: row.commission_rate,
+  adminFeeType: row.admin_fee_type, adminFeeValue: row.admin_fee_value, logisticsFee: row.logistics_fee, logisticsFeeType: row.logistics_fee_type, logisticsFeeValue: row.logistics_fee_value, courierShare: row.courier_share, sellerProceeds: row.seller_proceeds,
   total: row.total, collected: row.collected, difference: money(row.collected - row.total), paymentReference: row.payment_reference, collectedAt: row.collected_at, status: row.collection_status,
 });
 
@@ -90,7 +77,7 @@ function filters(params, scope) {
   ];
 }
 
-const SUMS = `COUNT(*) AS orders, COALESCE(SUM(cr.product_total), 0) AS product_total, COALESCE(SUM(cr.rider_fee), 0) AS rider_fee, COALESCE(SUM(cr.admin_fee), 0) AS admin_fee,
+const SUMS = `COUNT(*) AS orders, COALESCE(SUM(cr.product_total), 0) AS product_total, COALESCE(SUM(cr.rider_fee), 0) AS rider_fee, COALESCE(SUM(cr.admin_fee), 0) AS admin_fee, COALESCE(SUM(cr.logistics_fee), 0) AS logistics_fee, COALESCE(SUM(cr.courier_share), 0) AS courier_share,
   COALESCE(SUM(cr.seller_proceeds), 0) AS seller_proceeds, COALESCE(SUM(cr.total), 0) AS total, COALESCE(SUM(cr.collected), 0) AS collected,
   COALESCE(SUM(CASE WHEN cr.payment_method = '${COD}' THEN cr.collected ELSE 0 END), 0) AS cod_collected,
   COALESCE(SUM(CASE WHEN cr.payment_method <> '${COD}' THEN cr.collected ELSE 0 END), 0) AS prepaid_collected,
@@ -98,13 +85,13 @@ const SUMS = `COUNT(*) AS orders, COALESCE(SUM(cr.product_total), 0) AS product_
   COALESCE(SUM(CASE WHEN (${STATUS}) = 'remitted' THEN cr.collected ELSE 0 END), 0) AS remitted`;
 
 const toSums = (row) => ({
-  orders: row.orders, productTotal: money(row.product_total), riderFee: money(row.rider_fee), adminFee: money(row.admin_fee), sellerProceeds: money(row.seller_proceeds), total: money(row.total),
+  orders: row.orders, productTotal: money(row.product_total), riderFee: money(row.rider_fee), adminFee: money(row.admin_fee), logisticsFee: money(row.logistics_fee), courierShare: money(row.courier_share), onetapFees: money(row.admin_fee + row.logistics_fee), sellerProceeds: money(row.seller_proceeds), total: money(row.total),
   collected: money(row.collected), codCollected: money(row.cod_collected), prepaidCollected: money(row.prepaid_collected), withRiders: money(row.with_riders), remitted: money(row.remitted),
 });
 
 const CSV = [
   ['Order', (r) => r.orderId], ['Seller', (r) => r.seller], ['Customer', (r) => r.customer], ['Courier', (r) => r.courier], ['Rider', (r) => r.rider], ['Payment method', (r) => r.paymentMethod],
-  ['Product total', (r) => r.productTotal], ['Rider fee', (r) => r.riderFee], ['Commission %', (r) => r.commissionRate], ['Admin fee', (r) => r.adminFee], ['Seller proceeds', (r) => r.sellerProceeds],
+  ['Product total', (r) => r.productTotal], ['Delivery fee', (r) => r.riderFee], ['Logistics fee', (r) => r.logisticsFee], ['Courier share', (r) => r.courierShare], ['Admin fee basis', (r) => (r.adminFeeType === 'fixed' ? `fixed ${r.adminFeeValue}` : `${r.adminFeeValue}%`)], ['Admin fee', (r) => r.adminFee], ['Seller proceeds', (r) => r.sellerProceeds],
   ['Total transaction', (r) => r.total], ['Collected', (r) => r.collected], ['Payment reference', (r) => r.paymentReference], ['Collection date', (r) => isoDate(r.collectedAt)], ['Collection status', (r) => r.status],
 ];
 
@@ -116,7 +103,7 @@ export function listCollections(params, scope = {}) {
   if (params.get('format') === 'csv') return csvResponse('onetap-collections.csv', CSV, records);
   const clause = where.length ? `WHERE ${where.map(([sql]) => sql).join(' AND ')}` : '';
   const totals = db().prepare(`SELECT ${SUMS} FROM ${COLLECTION_LIST.from} ${clause}`).get(...where.flatMap(([, ...args]) => args));
-  return Response.json({ ...page, rows: records, totals: toSums(totals), commissionRate: commissionRate() });
+  return Response.json({ ...page, rows: records, totals: toSums(totals) });
 }
 
 const PERIODS = {
@@ -134,7 +121,7 @@ export function collectionsReport(params, scope = {}) {
     .all(...where.flatMap(([, ...args]) => args)).map((row) => ({ period: row.period, ...toSums(row) }));
   if (params.get('format') === 'csv') {
     return csvResponse(`onetap-collections-${period}.csv`, [
-      ['Period', (r) => r.period], ['Orders', (r) => r.orders], ['Product total', (r) => r.productTotal], ['Rider fees', (r) => r.riderFee], ['Admin fees', (r) => r.adminFee], ['Seller proceeds', (r) => r.sellerProceeds],
+      ['Period', (r) => r.period], ['Orders', (r) => r.orders], ['Product total', (r) => r.productTotal], ['Delivery fees', (r) => r.riderFee], ['Logistics fees', (r) => r.logisticsFee], ['Courier shares', (r) => r.courierShare], ['Admin fees', (r) => r.adminFee], ['Seller proceeds', (r) => r.sellerProceeds],
       ['Total transactions', (r) => r.total], ['COD collected', (r) => r.codCollected], ['Prepaid collected', (r) => r.prepaidCollected], ['COD with riders', (r) => r.withRiders], ['Remitted to Onetap', (r) => r.remitted],
     ], rows);
   }

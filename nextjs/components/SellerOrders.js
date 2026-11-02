@@ -76,7 +76,7 @@ function openCancel(order) {
           toast(`${order.id} was cancelled.`);
         }}
       >
-        <p className="muted order-modal__text">The buyer is told why{order.paid ? ` and refunded ${peso(order.total)}` : ''}. This can&apos;t be undone.</p>
+        <p className="muted order-modal__text">The buyer is told why{order.paid ? ' and gets a full refund' : ''}. This can&apos;t be undone.</p>
       </FormModal>
     ),
   });
@@ -160,7 +160,7 @@ export function openWaybill(order) {
             <small>Contents</small>
             {order.items.map((item) => <span key={`${item.product}-${item.variation}`}>{item.qty} x {item.name}</span>)}
           </div>
-          {order.payment === 'Cash on Delivery' && !order.paid && <strong className="waybill__cod">Collect {peso(order.total)}</strong>}
+          {order.payment === 'Cash on Delivery' && !order.paid && <strong className="waybill__cod">Collect {peso(order.codAmount)}</strong>}
         </div>
         <button className="btn btn--primary btn--block order-modal__submit" type="button" onClick={() => window.print()}>Print Waybill</button>
       </>
@@ -179,7 +179,7 @@ function OrderActions({ order }) {
   if (order.cancel?.status === 'pending') {
     add('Approve Cancellation', () => confirmAction({
       title: `Approve cancellation of ${order.id}`,
-      body: `The order is cancelled${order.paid ? ` and ${peso(order.total)} goes back to the buyer` : ''}.`,
+      body: `The order is cancelled${order.paid ? ' and the buyer gets a full refund' : ''}.`,
       label: 'Approve Cancellation',
       run: () => Orders.approveCancel(order),
       done: `${order.id} was cancelled.`,
@@ -218,7 +218,7 @@ function OrderActions({ order }) {
   } else if (order.failed?.status === 'returning') {
     add('Confirm Parcel Received', () => confirmAction({
       title: `Confirm return of ${order.id}`,
-      body: order.paid ? `${peso(order.total)} goes back to the buyer. This can't be undone.` : 'No refund is due because the buyer has not paid.',
+      body: order.paid ? 'The buyer gets a full refund. This can\'t be undone.' : 'No refund is due because the buyer has not paid.',
       label: 'Confirm Parcel Received',
       run: () => Orders.receiveFailed(order),
       done: order.paid ? 'The refund was released.' : 'The parcel was marked as received.',
@@ -230,8 +230,8 @@ function OrderActions({ order }) {
     add(refundOnly ? 'Approve Refund' : 'Approve Return', () => confirmAction({
       title: `${refundOnly ? 'Refund' : 'Approve return for'} ${order.id}`,
       body: refundOnly
-        ? `${peso(order.total)} goes back to the buyer now.`
-        : `The buyer sends the item back. You refund ${peso(order.total)} once you confirm it arrived.`,
+        ? 'The buyer gets a full refund now.'
+        : 'The buyer sends the item back. They get a full refund once you confirm it arrived.',
       label: refundOnly ? 'Approve Refund' : 'Approve Return',
       run: () => Orders.approveReturn(order),
       done: refundOnly ? 'The refund was released.' : 'The return was approved.',
@@ -240,7 +240,7 @@ function OrderActions({ order }) {
   } else if (order.return?.status === 'awaiting') {
     add('Confirm Item Received', () => confirmAction({
       title: `Confirm return of ${order.id}`,
-      body: `${peso(order.total)} goes back to the buyer. This can't be undone.`,
+      body: 'The buyer gets a full refund. This can\'t be undone.',
       label: 'Confirm and Refund',
       run: () => Orders.receiveReturn(order),
       done: 'The refund was released.',
@@ -291,11 +291,10 @@ function OrderCard({ order, showStatus, selectable, selected, onSelect }) {
       <footer className="order-card__foot">
         <div className="order-card__meta">
           <span>{order.payment} · {paymentLabel(order)}</span>
-          {order.payment === 'Cash on Delivery' && !order.paid && order.status !== 'cancelled' && <span>Expected COD collection {peso(order.total)}</span>}
           {order.tracking && <span>{order.courier} · {order.tracking}</span>}
           {order.shipBy && ['to_ship', 'ready'].includes(order.status) && <span className="order-card__due">Ship by {formatDate(order.shipBy)}</span>}
         </div>
-        <div className="order-card__total"><small>Order total</small><strong>{peso(order.total)}</strong></div>
+        <div className="order-card__total"><small>Product total</small><strong>{peso(order.productTotal)}</strong></div>
         <div className="order-card__actions">
           <OrderActions order={order} />
           <Link className="btn-mini" href={`/seller/orders/${order.id}`}>View Details<span className="sr-only"> for {order.id}</span></Link>
@@ -648,7 +647,7 @@ export function OrderDetail({ id }) {
               title={order.return.type}
               status={RETURN_STATUS[order.return.status]}
               response={order.return.response}
-              rows={[['Reason', order.return.reason], ['Buyer says', order.return.detail], ['Requested', formatDate(order.return.at)], ['Refund amount', peso(order.total)]]}
+              rows={[['Reason', order.return.reason], ['Buyer says', order.return.detail], ['Requested', formatDate(order.return.at)], ['Refund', 'Full refund to the buyer']]}
             />
           )}
 
@@ -656,7 +655,7 @@ export function OrderDetail({ id }) {
             <RequestPanel
               title="Failed Delivery"
               status={FAILED_STATUS[order.failed.status]}
-              rows={[['Reason', order.failed.reason], ['Delivery attempts', order.failed.attempts], ['Reported', formatDate(order.failed.at)], ['Courier', order.courier], ['Amount', peso(order.total)]]}
+              rows={[['Reason', order.failed.reason], ['Delivery attempts', order.failed.attempts], ['Reported', formatDate(order.failed.at)], ['Courier', order.courier], ['Products', peso(order.productTotal)]]}
             />
           )}
           <section className="panel">
@@ -702,11 +701,7 @@ export function OrderDetail({ id }) {
             <dl className="order-sum">
               <div><dt>Method</dt><dd>{order.payment}</dd></div>
               <div><dt>Status</dt><dd>{paymentLabel(order)}</dd></div>
-              {order.payment === 'Cash on Delivery' && !order.paid && <div><dt>Expected collection</dt><dd>{peso(order.total)}</dd></div>}
-              <div><dt>Subtotal</dt><dd>{peso(order.subtotal)}</dd></div>
-              <div><dt>Shipping</dt><dd>{peso(order.shippingFee)}</dd></div>
-              {order.voucher > 0 && <div><dt>Voucher</dt><dd>-{peso(order.voucher)}</dd></div>}
-              <div className="order-sum__total"><dt>Total</dt><dd>{peso(order.total)}</dd></div>
+              <div className="order-sum__total"><dt>Product total</dt><dd>{peso(order.productTotal)}</dd></div>
             </dl>
           </section>
         </aside>

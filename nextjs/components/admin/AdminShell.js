@@ -19,6 +19,7 @@ const NAV = [
   { label: 'Shipment Monitoring', href: '/admin/shipments', icon: 'box', permission: 'shipments' },
   { label: 'COD Monitoring', href: '/admin/cod', icon: 'wallet', permission: 'cod' },
   { label: 'Financial Collections', href: '/admin/collections', icon: 'chart', permission: 'cod' },
+  { label: 'Fee Management', href: '/admin/fees', icon: 'chart', permission: 'fees' },
   { label: 'Seller Payouts', href: '/admin/payouts', icon: 'wallet', permission: 'cod' },
   { label: 'Payout Accounts', href: '/admin/payout-accounts', icon: 'shield', permission: 'cod' },
   { label: 'Seller Registration Approval', href: '/admin/sellers', icon: 'store', permission: 'sellers' },

@@ -4,9 +4,10 @@
 // entry if that order is later refunded. Each order can have only one of each, so nothing is
 // counted twice, and every figure traces back to an order. Entries are never edited.
 //
-// Net income = product revenue - platform fees - commissions - refunds - other deductions.
-// Shipping fees are paid by the buyer and passed to the courier, so they are in gross sales but
-// never in the seller's net. A refund reverses the commission on that order.
+// Net income = product revenue - admin fee (Fee Management) - refunds - other deductions.
+// Delivery fees are the buyer's and the courier's, never the seller's. A refund reverses the admin
+// fee on that order. Sellers never see fees: everything sent to Seller Centre goes through
+// forSeller(), which keeps only sales, refunds and net amounts.
 //
 // An order's net income becomes eligible once Onetap holds the money (a prepaid payment is on
 // record, or the courier remitted the COD cash) and the buyer's 7-day return window has closed
@@ -174,6 +175,16 @@ function orderRecords(seller) {
   });
 }
 
+// What Seller Centre may see of an order's income: sales, refunds and net. No fees of any kind.
+function forSeller(record) {
+  const { gross, shippingFee, platformFee, commission, commissionRate, deduction, productRevenue, entries, items, ...rest } = record;
+  return {
+    ...rest, sales: productRevenue,
+    ...(items ? { items } : {}),
+    ...(entries ? { entries: entries.map(({ id, kind, at, productRevenue: sales, refund, net }) => ({ id, kind, at, sales, refund, net })) } : {}),
+  };
+}
+
 const toEntry = (row) => ({
   id: row.id, kind: row.kind, at: row.at, gross: money(row.gross), productRevenue: money(row.product_revenue), shippingFee: money(row.shipping_fee), platformFee: money(row.platform_fee),
   commission: money(row.commission), refund: money(row.refund), deduction: money(row.deduction), net: money(row.net),
@@ -260,12 +271,12 @@ export function incomeOverview(seller) {
   const since = (start) => totalsOf(all.filter((entry) => entry.at >= start)).netIncome;
   // 90 Philippine days, oldest first, for the trend chart.
   const days = Array.from({ length: 90 }, (_, i) => phDate(today - (89 - i) * DAY));
-  const daily = Object.fromEntries(days.map((d) => [d, { date: d, net: 0, gross: 0, orders: 0 }]));
+  const daily = Object.fromEntries(days.map((d) => [d, { date: d, net: 0, sales: 0, orders: 0 }]));
   all.forEach((entry) => {
     const bucket = daily[phDate(entry.at)];
     if (!bucket) return;
     bucket.net = money(bucket.net + entry.net);
-    bucket.gross = money(bucket.gross + entry.gross);
+    bucket.sales = money(bucket.sales + entry.product_revenue - entry.refund);
     if (entry.kind === 'sale') bucket.orders += 1;
   });
   const lifetime = totalsOf(all);
@@ -284,7 +295,7 @@ export function incomeOverview(seller) {
       releases: Object.entries(records.filter((r) => r.status === 'pending_release').reduce((by, r) => ({ ...by, [r.releaseAt]: money((by[r.releaseAt] || 0) + r.net) }), {}))
         .map(([at, amount]) => ({ at: Number(at), amount })).sort((a, b) => a.at - b.at),
     },
-    totals: { totalEarnings: lifetime.netIncome, totalSales: lifetime.grossSales, productRevenue: lifetime.productRevenue, orders: lifetime.orders, today: since(today), week: since(weekStart), month: since(monthStart) },
+    totals: { totalEarnings: lifetime.netIncome, sales: lifetime.productRevenue, orders: lifetime.orders, today: since(today), week: since(weekStart), month: since(monthStart) },
     balance,
     trend: Object.values(daily),
     payouts: payouts.slice(0, 10).map((row) => toPayout(row)),
@@ -294,10 +305,9 @@ export function incomeOverview(seller) {
 
 const PERIODS = ['day', 'week', 'month', 'year'];
 const STATEMENT_CSV = [
-  ['Period', (r) => r.period], ['Orders', (r) => r.orders], ['Refunded orders', (r) => r.refundedOrders], ['Gross sales', (r) => r.grossSales], ['Product revenue', (r) => r.productRevenue],
-  ['Shipping fees (to courier)', (r) => r.shippingFees], ['Platform fees', (r) => r.platformFees], ['Commissions', (r) => r.commissions], ['Refunds', (r) => r.refunds],
-  ['Other deductions', (r) => r.deductions], ['Net income', (r) => r.netIncome],
+  ['Period', (r) => r.period], ['Orders', (r) => r.orders], ['Refunded orders', (r) => r.refundedOrders], ['Product sales', (r) => r.sales], ['Refunds', (r) => r.refunds], ['Net income', (r) => r.netIncome],
 ];
+const statementLine = (period, totals) => ({ period, orders: totals.orders, refundedOrders: totals.refundedOrders, sales: totals.productRevenue, refunds: totals.refunds, netIncome: totals.netIncome });
 
 export function incomeStatement(seller, params) {
   syncSellerIncome(seller);
@@ -313,22 +323,22 @@ export function incomeStatement(seller, params) {
     const key = periodKey(entry.at, period);
     groups.set(key, [...(groups.get(key) || []), entry]);
   });
-  const rows = [...groups.entries()].map(([key, list]) => ({ period: key, ...totalsOf(list) }));
-  const summary = { period: 'Total', ...totalsOf(entries) };
+  const rows = [...groups.entries()].map(([key, list]) => statementLine(key, totalsOf(list)));
+  const summary = statementLine('Total', totalsOf(entries));
   const range = { from: phDate(from), to: phDate(to) };
   if (params.get('format') === 'csv') return csvResponse(`onetap-income-statement-${range.from}-to-${range.to}.csv`, STATEMENT_CSV, [...rows, summary]);
   return Response.json({ range, period, rows, summary, generatedAt: time });
 }
 
-const DETAIL_SORTS = { date: (r) => r.orderDate, net: (r) => r.net, gross: (r) => r.gross };
+const DETAIL_SORTS = { date: (r) => r.orderDate, net: (r) => r.net, sales: (r) => r.sales };
 const DETAIL_CSV = [
   ['Order', (r) => r.orderId], ['Product', (r) => r.product + (r.moreItems ? ` (+${r.moreItems} more)` : '')], ['Quantity', (r) => r.quantity], ['Order date', (r) => isoDate(r.orderDate)],
-  ['Delivered', (r) => isoDate(r.deliveredAt)], ['Payment', (r) => r.paymentMethod], ['Gross amount', (r) => r.gross], ['Shipping fee (to courier)', (r) => r.shippingFee], ['Platform fees', (r) => r.platformFee],
-  ['Commission', (r) => r.commission], ['Refund', (r) => r.refund], ['Other deductions', (r) => r.deduction], ['Net earnings', (r) => r.net], ['Income status', (r) => r.statusText], ['Payout status', (r) => r.payoutStatus],
+  ['Delivered', (r) => isoDate(r.deliveredAt)], ['Payment', (r) => r.paymentMethod], ['Product sales', (r) => r.sales], ['Refund', (r) => r.refund], ['Net earnings', (r) => r.net],
+  ['Income status', (r) => r.statusText], ['Payout status', (r) => r.payoutStatus],
 ];
 
 export function incomeDetails(seller, params) {
-  const records = withPayoutStatus(orderRecords(seller), payoutsOf(seller));
+  const records = withPayoutStatus(orderRecords(seller), payoutsOf(seller)).map(forSeller);
   const q = String(params.get('q') || '').trim().toLowerCase();
   const status = params.get('status');
   const payout = params.get('payout');
@@ -345,13 +355,14 @@ export function incomeDetails(seller, params) {
   const counts = Object.fromEntries(Object.keys(statusText).map((key) => [key, records.filter((r) => r.status === key).length]));
   return Response.json({
     rows: rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(({ entries, items, ...row }) => row), total: rows.length, page, pageSize: PAGE_SIZE,
-    counts, totals: { gross: sum(rows, 'gross'), net: sum(rows, 'net') },
+    counts, totals: { sales: sum(rows, 'sales'), net: sum(rows, 'net') },
   });
 }
 
 export function incomeRecord(seller, orderId) {
   const records = withPayoutStatus(orderRecords(seller), payoutsOf(seller));
-  const record = records.find((r) => r.orderId === String(orderId));
+  const found = records.find((r) => r.orderId === String(orderId));
+  const record = found && forSeller(found);
   if (!record) throw new ApiError(404, 'There is no income record for that order yet. Income is recorded when the order is delivered.');
   return record;
 }

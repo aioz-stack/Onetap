@@ -8,10 +8,9 @@ import { dateOnly, dateTime, DataTable, FilterBar, Tabs, useAdminList, useRefres
 import { Badge, FormModal, tomorrow } from './SellerOrders';
 import { confirmModal } from './SellerProducts';
 import { options, PICKUP_STATUS } from '@/lib/adminLabels';
-import { SHIPPING_ZONES } from '@/lib/data';
 import { logisticsOptions, send } from '@/lib/productsApi';
 import { pickupScheduleSchema } from '@/lib/schemas';
-import { Modal, peso, toast } from '@/lib/ui';
+import { Modal, toast } from '@/lib/ui';
 
 const CLIENT = { fetch: (url) => send(`/api/seller${url}`), base: '/api/seller' };
 const CHANGEABLE = ['awaiting_payment', 'pending', 'scheduled', 'failed'];
@@ -89,7 +88,7 @@ function AvailableCouriers() {
       {couriers.length === 0 ? <p className="muted">No courier is available right now.</p> : (
         <div className="admin-table" role="region" aria-label="Available couriers" tabIndex={0}>
           <table>
-            <thead><tr><th scope="col">Courier</th><th scope="col">Services</th><th scope="col">Service coverage</th><th scope="col">Pickup locations</th><th scope="col">Delivery locations</th><th scope="col">{SHIPPING_ZONES[0]} rate</th></tr></thead>
+            <thead><tr><th scope="col">Courier</th><th scope="col">Services</th><th scope="col">Service coverage</th><th scope="col">Pickup locations</th><th scope="col">Delivery locations</th></tr></thead>
             <tbody>
               {couriers.map((courier) => (
                 <tr key={courier.id}>
@@ -98,7 +97,6 @@ function AvailableCouriers() {
                   <td>{courier.zones.join(', ') || 'None'}</td>
                   <td>{courier.pickupLocations.join(', ') || 'None'}</td>
                   <td>{courier.deliveryLocations.join(', ') || 'None'}</td>
-                  <td>{peso(Number(courier.base[SHIPPING_ZONES[0]]))}</td>
                 </tr>
               ))}
             </tbody>

@@ -51,10 +51,9 @@ function Explainer() {
     <details className="panel income-explainer">
       <summary>How your income is calculated</summary>
       <ul>
-        <li><strong>Gross sales</strong> is what buyers paid for your delivered orders: product prices plus shipping.</li>
-        <li><strong>Shipping fees</strong> go to the courier, so they never count as your income.</li>
-        <li><strong>Net income</strong> = product revenue − platform fees − Onetap&apos;s commission − refunds − other deductions. Onetap charges no separate platform fee today, and the commission rate is fixed on each order when it&apos;s delivered.</li>
-        <li>A refund takes back that order&apos;s product revenue and returns its commission.</li>
+        <li><strong>Sales</strong> are the product prices of your delivered orders.</li>
+        <li><strong>Net income</strong> is what you earn from those sales, less refunds. It&apos;s worked out for every order when it&apos;s delivered.</li>
+        <li>A refunded order earns nothing.</li>
         <li>An order&apos;s income becomes <strong>eligible</strong> once Onetap holds the money (a prepaid payment is on record, or the courier remitted the COD cash) and the buyer&apos;s 7-day return window has closed with no return open.</li>
         <li>Eligible income is paid weekly. Everything that becomes eligible from Monday 12:00 AM to Sunday 11:59 PM is <strong>Pending</strong>, and is <strong>Released</strong> the following Tuesday at 8:00 AM.</li>
         <li><strong>Total Income</strong> = Released + Pending + income not yet eligible.</li>
@@ -125,20 +124,20 @@ function Overview() {
           <h2 id="income-trend">Sales and Income Trend</h2>
           <div className="income-toggles">
             <div className="order-tabs" role="group" aria-label="Measure">
-              {[['net', 'Net income'], ['gross', 'Gross sales']].map(([key, label]) => <button type="button" key={key} aria-pressed={metric === key} onClick={() => setMetric(key)}>{label}</button>)}
+              {[['net', 'Net income'], ['sales', 'Sales']].map(([key, label]) => <button type="button" key={key} aria-pressed={metric === key} onClick={() => setMetric(key)}>{label}</button>)}
             </div>
             <div className="order-tabs" role="group" aria-label="Range">
               {[7, 30, 90].map((n) => <button type="button" key={n} aria-pressed={range === n} onClick={() => setRange(n)}>{n} days</button>)}
             </div>
           </div>
         </div>
-        <TrendChart title={`${metric === 'net' ? 'Net income' : 'Gross sales'}, last ${range} days`} money labelEvery={range === 7 ? 1 : range === 30 ? 5 : 15} series={[{ label: metric === 'net' ? 'Net income' : 'Gross sales', tone: 'one', values: days }]} />
+        <TrendChart title={`${metric === 'net' ? 'Net income' : 'Sales'}, last ${range} days`} money labelEvery={range === 7 ? 1 : range === 30 ? 5 : 15} series={[{ label: metric === 'net' ? 'Net income' : 'Sales', tone: 'one', values: days }]} />
         <details className="income-table-toggle">
           <summary>Show as table</summary>
           <div className="income-scroll">
             <table className="income-table">
-              <thead><tr><th scope="col">Day</th><th scope="col">Orders</th><th scope="col">Gross sales</th><th scope="col">Net income</th></tr></thead>
-              <tbody>{data.trend.slice(-range).reverse().map((d) => <tr key={d.date}><th scope="row">{d.date}</th><td>{d.orders}</td><td>{peso(d.gross)}</td><td>{peso(d.net)}</td></tr>)}</tbody>
+              <thead><tr><th scope="col">Day</th><th scope="col">Orders</th><th scope="col">Sales</th><th scope="col">Net income</th></tr></thead>
+              <tbody>{data.trend.slice(-range).reverse().map((d) => <tr key={d.date}><th scope="row">{d.date}</th><td>{d.orders}</td><td>{peso(d.sales)}</td><td>{peso(d.net)}</td></tr>)}</tbody>
             </table>
           </div>
         </details>
@@ -153,15 +152,10 @@ function Overview() {
 }
 
 const STATEMENT_LINES = [
-  ['grossSales', 'Gross sales', ''],
-  ['shippingFees', 'Less: shipping fees passed to couriers', '−'],
-  ['productRevenue', 'Product revenue', '=', true],
-  ['platformFees', 'Less: platform fees', '−'],
-  ['commissions', 'Less: Onetap commission (net of reversals)', '−'],
+  ['sales', 'Product sales', ''],
   ['refunds', 'Less: refunds', '−'],
-  ['deductions', 'Less: other deductions', '−'],
   ['netIncome', 'Net income', '=', true],
-];
+]
 const PERIOD_LABELS = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' };
 
 function Statement() {
@@ -226,18 +220,17 @@ function Statement() {
             <div className="income-scroll">
               <table className="income-table">
                 <thead>
-                  <tr><th scope="col">Period</th><th scope="col">Orders</th><th scope="col">Gross sales</th><th scope="col">Shipping</th><th scope="col">Product revenue</th><th scope="col">Platform fees</th><th scope="col">Commissions</th><th scope="col">Refunds</th><th scope="col">Deductions</th><th scope="col">Net income</th></tr>
+                  <tr><th scope="col">Period</th><th scope="col">Orders</th><th scope="col">Product sales</th><th scope="col">Refunds</th><th scope="col">Net income</th></tr>
                 </thead>
                 <tbody>
                   {data.rows.map((row) => (
                     <tr key={row.period}>
-                      <th scope="row">{row.period}</th><td>{row.orders}</td><td>{peso(row.grossSales)}</td><td>{peso(row.shippingFees)}</td><td>{peso(row.productRevenue)}</td><td>{peso(row.platformFees)}</td>
-                      <td>{peso(row.commissions)}</td><td>{peso(row.refunds)}</td><td>{peso(row.deductions)}</td><td><strong>{peso(row.netIncome)}</strong></td>
+                      <th scope="row">{row.period}</th><td>{row.orders}</td><td>{peso(row.sales)}</td><td>{peso(row.refunds)}</td><td><strong>{peso(row.netIncome)}</strong></td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr><th scope="row">Total</th><td>{data.summary.orders}</td><td>{peso(data.summary.grossSales)}</td><td>{peso(data.summary.shippingFees)}</td><td>{peso(data.summary.productRevenue)}</td><td>{peso(data.summary.platformFees)}</td><td>{peso(data.summary.commissions)}</td><td>{peso(data.summary.refunds)}</td><td>{peso(data.summary.deductions)}</td><td><strong>{peso(data.summary.netIncome)}</strong></td></tr>
+                  <tr><th scope="row">Total</th><td>{data.summary.orders}</td><td>{peso(data.summary.sales)}</td><td>{peso(data.summary.refunds)}</td><td><strong>{peso(data.summary.netIncome)}</strong></td></tr>
                 </tfoot>
               </table>
             </div>
@@ -253,10 +246,7 @@ function RecordDetail({ orderId }) {
   if (error) return <p className="form-error" role="alert">{error}</p>;
   if (!data) return <div className="skeleton" role="status" aria-label="Loading the transaction" />;
   const r = data.record;
-  const lines = [
-    ['Gross amount (buyer paid)', r.gross], ['Shipping fee, passed to the courier', -r.shippingFee], ['Product revenue', r.productRevenue], ['Platform fees', -r.platformFee],
-    [`Onetap commission (${r.commissionRate}%${r.refund ? ', reversed by the refund' : ''})`, -r.commission], ['Refund to the buyer', -r.refund], ['Other deductions', -r.deduction],
-  ];
+  const lines = [['Product sales', r.sales], ['Refund to the buyer', -r.refund]];
   const timeline = [
     ['Order placed', r.orderDate], ['Delivered, income recorded', r.deliveredAt], ['Money settled with Onetap', r.settledAt], ['Return window closed', r.windowEnds <= Date.now() ? r.windowEnds : null],
     ['Eligible for release', r.eligibleAt], ['Refunded to the buyer', r.refundedAt], [r.releasedAt ? 'Released' : 'Scheduled release', r.releasedAt || r.releaseAt],
@@ -312,7 +302,7 @@ function Details({ initial }) {
         <DateFilter list={list} name="from" label="Delivered from" />
         <DateFilter list={list} name="to" label="To" />
       </FilterBar>
-      {list.data && <p className="muted income-totals">{list.data.total} {list.data.total === 1 ? 'order' : 'orders'} · gross {peso(list.data.totals.gross)} · net {peso(list.data.totals.net)}</p>}
+      {list.data && <p className="muted income-totals">{list.data.total} {list.data.total === 1 ? 'order' : 'orders'} · sales {peso(list.data.totals.sales)} · net {peso(list.data.totals.net)}</p>}
       <DataTable
         list={list}
         label="Income by order"
@@ -323,10 +313,8 @@ function Details({ initial }) {
           { label: 'Product', render: (row) => <>{row.product}{row.moreItems > 0 && <small className="muted"> +{row.moreItems} more</small>}</> },
           { label: 'Qty', render: (row) => row.quantity },
           { label: 'Order date', sort: 'date', render: (row) => dateOnly(row.orderDate) },
-          { label: 'Gross', sort: 'gross', render: (row) => peso(row.gross) },
-          { label: 'Platform fees', render: (row) => peso(row.platformFee) },
-          { label: 'Commission', render: (row) => peso(row.commission) },
-          { label: 'Deductions', render: (row) => peso(row.refund + row.deduction) },
+          { label: 'Sales', sort: 'sales', render: (row) => peso(row.sales) },
+          { label: 'Refund', render: (row) => peso(row.refund) },
           { label: 'Net', sort: 'net', render: (row) => <strong>{peso(row.net)}</strong> },
           { label: 'Status', render: (row) => <Badge status={INCOME_STATUS[row.status]} /> },
           { label: 'Payout', render: (row) => <Badge status={INCOME_PAYOUT_STATUS[row.payoutStatus]} /> },

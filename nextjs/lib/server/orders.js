@@ -63,6 +63,13 @@ function changeStock(productId, variation, delta) {
   db.prepare('UPDATE products SET data = ? WHERE id = ?').run(JSON.stringify(product), productId);
 }
 
+// What Seller Centre may see of an order: no delivery fee, and no totals that include it. A COD
+// order keeps the amount the rider collects, which the waybill has to print.
+export function forSellerOrder(order) {
+  const { shippingFee, total, paidAmount, ...rest } = order;
+  return { ...rest, productTotal: order.subtotal ?? order.items.reduce((sum, item) => sum + item.price * item.qty, 0), codAmount: order.payment === 'Cash on Delivery' ? total : 0 };
+}
+
 export function listOrders(seller) {
   return getDb().prepare('SELECT * FROM orders WHERE seller = ? ORDER BY placed_at DESC').all(seller).map((row) => withRiders(toOrder(row), 'seller'));
 }
@@ -140,7 +147,7 @@ function createOrder(customer, seller, lines, { address, zone, payment, checkout
   getDb().prepare('INSERT INTO orders (id, seller, customer, data, placed_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
     .run(order.id, seller, customer.username, JSON.stringify(order), placedAt.getTime(), placedAt.getTime());
   if (cod) createCodRecord(order);
-  notifySeller(seller, 'New order', `${order.id} from ${order.buyer.name}. ${cod ? 'Cash on delivery' : 'Prepaid'}, total ₱${order.total}. Approve it to start fulfilment.`, `/seller/orders/${order.id}`);
+  notifySeller(seller, 'New order', `${order.id} from ${order.buyer.name}. ${cod ? 'Cash on delivery' : 'Prepaid'}, products ₱${order.subtotal}. Approve it to start fulfilment.`, `/seller/orders/${order.id}`);
   return order;
 }
 

@@ -1134,6 +1134,26 @@ button.topnav__item:hover, a.topnav__item:hover, .topnav__follow a:hover { color
   .income-controls__spacer { display: none; }
   .income-page .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* Admin Console: Fee Management */
+.fee-editors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.fee-editor { display: flex; flex-direction: column; gap: 10px; margin: 0; min-width: 0; }
+.fee-editor__title { float: left; width: 100%; margin-bottom: 4px; padding: 0; font-size: 17px; font-weight: 700; }
+.fee-editor > p { margin: 0; font-size: 14px; }
+.fee-editor__types { display: flex; flex-wrap: wrap; gap: 8px; }
+.fee-type { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.fee-type.is-on { border-color: var(--link); background: var(--surface-2); color: var(--link); }
+.fee-type input { accent-color: var(--primary); }
+.fee-editor__value { display: flex; align-items: center; gap: 8px; max-width: 240px; }
+.fee-editor__value input { flex: 1; min-width: 0; font-variant-numeric: tabular-nums; }
+.fee-editor__value span { color: var(--muted); font-weight: 700; }
+.fee-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.fee-example__inputs { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.fee-example { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+@media (max-width: 760px) {
+  .fee-editors, .fee-example { grid-template-columns: minmax(0, 1fr); }
+  .fee-actions .btn { flex: 1; }
+}
+
 /* Bank Accounts and choosing one to withdraw to */
 .income-head-action { margin-left: auto; }
 .payout-account-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }

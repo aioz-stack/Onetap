@@ -1,9 +1,9 @@
 // Administrator roles, shared by the server checks and the admin navigation.
 
 export const ADMIN_ROLES = {
-  super_admin: { label: 'Super Admin', permissions: ['logistics', 'api', 'pickups', 'shipments', 'cod', 'products', 'sellers', 'customers', 'audit', 'team'] },
+  super_admin: { label: 'Super Admin', permissions: ['logistics', 'api', 'pickups', 'shipments', 'cod', 'fees', 'products', 'sellers', 'customers', 'audit', 'team'] },
   logistics: { label: 'Logistics Manager', permissions: ['logistics', 'api', 'pickups', 'shipments'] },
-  finance: { label: 'Finance', permissions: ['shipments', 'cod'] },
+  finance: { label: 'Finance', permissions: ['shipments', 'cod', 'fees'] },
   moderator: { label: 'Moderator', permissions: ['products', 'sellers', 'customers'] },
 };
 

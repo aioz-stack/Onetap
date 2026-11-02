@@ -629,7 +629,8 @@ export function RiderCollections() {
                       <small className="muted">{row.paymentMethod} · {dateTime(row.collectedAt)}</small>
                       <dl className="rider-breakdown">
                         <div><dt>Product total</dt><dd>{peso(row.productTotal)}</dd></div>
-                        <div><dt>Rider fee</dt><dd>{peso(row.riderFee)}</dd></div>
+                        <div><dt>Delivery fee</dt><dd>{peso(row.riderFee)}</dd></div>
+                        <div><dt>Courier share</dt><dd>{peso(row.courierShare ?? row.riderFee)}</dd></div>
                         <div><dt>Admin fee</dt><dd>{peso(row.adminFee)}</dd></div>
                         <div><dt>Total</dt><dd>{peso(row.total)}</dd></div>
                       </dl>

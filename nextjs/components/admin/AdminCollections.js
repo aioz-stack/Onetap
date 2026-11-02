@@ -1,42 +1,19 @@
 'use client';
 
-// Financial Collections: every delivered order's money, split into seller proceeds, the rider
-// (delivery) fee and Onetap's admin fee, and where the cash is now.
+// Financial Collections: every delivered order's money, split into seller proceeds, Onetap's admin
+// fee, and the delivery fee (Onetap's logistics fee and the courier's share), and where the cash
+// is now. The fees themselves are set in Fee Management.
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { adminFetch, Badge, dateTime, DataTable, DateFilter, FilterBar, PageHead, postAdmin, SelectFilter, StatCards, Tabs, TextField, useAdminList, useRefresh } from './AdminUI';
+import { adminFetch, Badge, dateTime, DataTable, DateFilter, FilterBar, PageHead, SelectFilter, StatCards, Tabs, useAdminList, useRefresh } from './AdminUI';
 import { COLLECTION_STATUS, options } from '@/lib/adminLabels';
-import { Modal, peso, toast } from '@/lib/ui';
+import { peso } from '@/lib/ui';
 
-function CommissionForm({ rate, onDone }) {
-  const [value, setValue] = useState(String(rate));
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
+// How an order's admin fee was worked out when it was delivered.
+const feeBasis = (type, value) => (type === 'fixed' ? `fixed ${peso(value)}` : `${value}%`);
 
-  async function submit(e) {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const body = await postAdmin('/collections', { commissionRate: value });
-      Modal.close();
-      toast(`Commission set to ${body.commissionRate}%. It applies to orders delivered from now on.`, 'success');
-      onDone();
-    } catch (err) {
-      setError(err.fields?.commissionRate || err.message);
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form className="assistant-form" onSubmit={submit}>
-      <p className="muted">Onetap&apos;s admin fee is this percentage of each order&apos;s product total, taken from the seller&apos;s proceeds. Delivery fees are never included. Orders already delivered keep the rate they were recorded with.</p>
-      <TextField id="commission-rate" label="Commission rate (%)" required inputMode="decimal" value={value} error={error} onChange={(e) => setValue(e.target.value)} />
-      <button className="btn btn--primary btn--block" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save Rate'}</button>
-    </form>
-  );
-}
-
-const REPORT_COLUMNS = [['Orders', 'orders'], ['Product Total', 'productTotal'], ['Rider Fees', 'riderFee'], ['Admin Fees', 'adminFee'], ['Seller Proceeds', 'sellerProceeds'], ['Total Transactions', 'total'], ['COD Collected', 'codCollected'], ['Prepaid Collected', 'prepaidCollected'], ['COD With Riders', 'withRiders'], ['Remitted to Onetap', 'remitted']];
+const REPORT_COLUMNS = [['Orders', 'orders'], ['Product Total', 'productTotal'], ['Delivery Fees', 'riderFee'], ['Logistics Fees', 'logisticsFee'], ['Courier Shares', 'courierShare'], ['Admin Fees', 'adminFee'], ['Seller Proceeds', 'sellerProceeds'], ['Total Transactions', 'total'], ['COD Collected', 'codCollected'], ['Prepaid Collected', 'prepaidCollected'], ['COD With Riders', 'withRiders'], ['Remitted to Onetap', 'remitted']];
 
 function Reports() {
   const [period, setPeriod] = useState('daily');
@@ -75,21 +52,22 @@ export function AdminCollections({ initial }) {
   const list = useAdminList('/collections', initial);
   useRefresh(list.reload);
   const totals = list.data?.totals;
-  const rate = list.data?.commissionRate;
 
   return (
     <div className="order-page admin-page">
-      <PageHead title="Financial Collections" text="Recorded automatically when a delivery is confirmed. Seller proceeds, rider fees and admin fees are kept apart: only admin fees are Onetap's.">
-        {rate !== undefined && <button className="btn-mini" type="button" onClick={() => Modal.open({ title: 'Marketplace commission', content: <CommissionForm rate={rate} onDone={list.reload} /> })}>Commission: {rate}%</button>}
+      <PageHead title="Financial Collections" text="Recorded automatically when a delivery is confirmed, with the fees in force at that moment. Onetap earns the admin fee (from the seller) and the logistics fee (from the delivery fee).">
+        <Link className="btn-mini" href="/admin/fees">Fee Management</Link>
       </PageHead>
-      {rate === 0 && <p className="admin-banner" role="note"><strong>Commission is 0%.</strong> No admin fee is being recorded. Set Onetap&apos;s rate to start recording it on new deliveries.</p>}
       {totals && (
         <section className="panel">
           <StatCards items={[
             { label: 'Total Transactions', value: peso(totals.total) },
             { label: 'Seller Proceeds', value: peso(totals.sellerProceeds) },
-            { label: 'Rider Fees', value: peso(totals.riderFee) },
             { label: 'Admin Fees', value: peso(totals.adminFee) },
+            { label: 'Logistics Fees', value: peso(totals.logisticsFee) },
+            { label: 'Onetap Fees', value: peso(totals.onetapFees) },
+            { label: 'Delivery Fees', value: peso(totals.riderFee) },
+            { label: 'Courier Shares', value: peso(totals.courierShare) },
             { label: 'COD Collected', value: peso(totals.codCollected) },
             { label: 'COD With Riders', value: peso(totals.withRiders), href: '/admin/collections?status=with_rider' },
             { label: 'Prepaid Collected', value: peso(totals.prepaidCollected) },
@@ -113,8 +91,8 @@ export function AdminCollections({ initial }) {
           { label: 'Seller', sort: 'seller', render: (row) => row.seller },
           { label: 'Customer', render: (row) => row.customer },
           { label: 'Product Total', render: (row) => peso(row.productTotal) },
-          { label: 'Rider Fee', render: (row) => peso(row.riderFee) },
-          { label: 'Admin Fee', render: (row) => <>{peso(row.adminFee)}<small className="admin-cell-note">{row.commissionRate}%</small></> },
+          { label: 'Admin Fee', render: (row) => <>{peso(row.adminFee)}<small className="admin-cell-note">{feeBasis(row.adminFeeType, row.adminFeeValue)}</small></> },
+          { label: 'Delivery Fee', render: (row) => <>{peso(row.riderFee)}<small className="admin-cell-note">Logistics {peso(row.logisticsFee)} · courier {peso(row.courierShare)}</small></> },
           { label: 'Total', sort: 'total', render: (row) => <>{peso(row.total)}{row.difference !== 0 && <small className="admin-cell-note">Collected {peso(row.collected)}</small>}</> },
           { label: 'Payment', render: (row) => <>{row.paymentMethod}{row.paymentReference && <small className="admin-cell-note">{row.paymentReference}</small>}</> },
           { label: 'Collected On', sort: 'collected', render: (row) => dateTime(row.collectedAt) },

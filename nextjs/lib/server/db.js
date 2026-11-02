@@ -588,6 +588,15 @@ export function getDb() {
   // When a customer was first approved. It stays set while they are re-verified after changing
   // their ID or name, so they keep their orders but can't buy until approved again.
   addColumns(database, 'customer_approvals', { approved_at: 'INTEGER' });
+  // How each delivered order's fees were worked out (Fee Management), and the courier's share of the
+  // delivery fee after Onetap's logistics fee. Older records were a commission percentage and no
+  // logistics fee, so the courier kept the whole delivery fee.
+  addColumns(database, 'collection_records', {
+    admin_fee_type: "TEXT NOT NULL DEFAULT ''", admin_fee_value: 'REAL NOT NULL DEFAULT 0', logistics_fee: 'REAL NOT NULL DEFAULT 0',
+    logistics_fee_type: "TEXT NOT NULL DEFAULT 'percent'", logistics_fee_value: 'REAL NOT NULL DEFAULT 0', courier_share: 'REAL',
+  });
+  database.exec("UPDATE collection_records SET admin_fee_type = 'percent', admin_fee_value = commission_rate WHERE admin_fee_type = ''");
+  database.exec('UPDATE collection_records SET courier_share = rider_fee - logistics_fee WHERE courier_share IS NULL');
   // Notices for administrators. Each is for one permission, and each administrator's read
   // position is the newest id they have seen.
   database.exec(`

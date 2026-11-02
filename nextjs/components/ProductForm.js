@@ -9,11 +9,11 @@ import { useEffect, useRef, useState } from 'react';
 import Icon from './Icon';
 import { RichEditor } from './RichText';
 import { confirmModal } from './SellerProducts';
-import { PRODUCT_CATEGORIES, SHIPPING_ZONES, STANDARD_PRODUCTS } from '@/lib/data';
-import { blankProduct, chargeableWeight, DEFAULT_SPECS, LIMITS, saleRows, shippingEstimates, textBlock, totalStock, validateProduct } from '@/lib/products';
-import { logisticsOptions, Products, uploadImage, uploadVideo } from '@/lib/productsApi';
+import { PRODUCT_CATEGORIES, STANDARD_PRODUCTS } from '@/lib/data';
+import { blankProduct, chargeableWeight, DEFAULT_SPECS, LIMITS, saleRows, textBlock, totalStock, validateProduct } from '@/lib/products';
+import { Products, uploadImage, uploadVideo } from '@/lib/productsApi';
 import { Auth, Store } from '@/lib/store';
-import { peso, toast } from '@/lib/ui';
+import { toast } from '@/lib/ui';
 
 function Field({ id, label, hint, error, optional, children }) {
   return (
@@ -300,12 +300,6 @@ function SalesSection({ product, errors, set }) {
 function ShippingSection({ product, errors, set }) {
   const { shipping } = product;
   const update = (patch) => set({ shipping: { ...shipping, ...patch } });
-  const [partners, setPartners] = useState([]);
-  const estimates = shippingEstimates(shipping, partners);
-
-  useEffect(() => {
-    logisticsOptions().then(setPartners).catch(() => {});
-  }, []);
   const weight = chargeableWeight(shipping);
 
   return (
@@ -316,20 +310,8 @@ function ShippingSection({ product, errors, set }) {
         <TextInput id="ship-length" label="Length (cm)" inputMode="decimal" value={shipping.length} error={errors['shipping.length']} onChange={(value) => update({ length: value })} />
         <TextInput id="ship-height" label="Height (cm)" inputMode="decimal" value={shipping.height} error={errors['shipping.height']} onChange={(value) => update({ height: value })} />
       </div>
-      <SelectInput id="ship-destination" label="Estimate delivery to" value={shipping.destination} error={errors['shipping.destination']} options={SHIPPING_ZONES} onChange={(destination) => update({ destination })} />
-      <div className="ship-estimate" aria-live="polite">
-        <strong>Estimated shipping fee</strong>
-        {estimates.length ? (
-          <>
-            <ul>
-              {estimates.map((estimate) => <li key={estimate.courier}><span>{estimate.courier}</span><strong>{peso(estimate.fee)}</strong></li>)}
-            </ul>
-            <small className="muted">Based on {weight.toFixed(2)} kg, the higher of actual and volumetric weight (L × W × H ÷ 5000).</small>
-          </>
-        ) : (
-          <p className="muted">Enter the weight or parcel size to see rates from your active couriers.</p>
-        )}
-      </div>
+      {/* Delivery fees are the buyer's and the courier's, so Seller Centre doesn't show them. */}
+      {weight > 0 && <p className="muted ship-weight">Chargeable weight: {weight.toFixed(2)} kg, the higher of actual and volumetric weight (L × W × H ÷ 5000).</p>}
 
       <fieldset className="choice">
         <legend>Pre-Order</legend>
