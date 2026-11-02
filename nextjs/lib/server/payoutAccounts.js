@@ -241,7 +241,7 @@ export function reviewAccount(admin, id, { action, note }) {
     const changed = database.prepare("UPDATE seller_payout_accounts SET status = ?, review_note = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ? AND status = 'pending'").run(status, reason, admin.username, now(), row.id).changes;
     if (!changed) throw new ApiError(409, 'This account has changed. Refresh and try again.');
     notifySeller(row.seller, action === 'verify' ? 'Account verified' : 'Account not verified',
-      action === 'verify' ? `Your ${row.provider_name} account ${mask(row.last4)} is verified. You can withdraw to it.` : `Your ${row.provider_name} account ${mask(row.last4)} was not verified: ${reason} Edit it to try again.`, '/seller/income/accounts');
+      action === 'verify' ? `Your ${row.provider_name} account ${mask(row.last4)} is verified. You can withdraw to it.` : `Your ${row.provider_name} account ${mask(row.last4)} was not verified: ${reason} Edit it to try again.`, '/seller/bank-accounts');
     audit(admin, `payout_account.${action}`, 'payout_account', row.id, { seller: row.seller, note: reason || undefined });
     database.exec('COMMIT');
   } catch (err) {

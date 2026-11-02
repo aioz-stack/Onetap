@@ -107,6 +107,15 @@ function SellerBar({ seller, navOpen, onToggleNav }) {
 function SellerNav({ seller, open }) {
   const pathname = usePathname();
   const actions = { shop: () => openShopInfo(seller) };
+  const renderItem = (item) => (
+    <li key={item.label}>
+      {item.href ? (
+        <Link href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</Link>
+      ) : (
+        <button type="button" onClick={() => (actions[item.action] || (() => notBuilt(item.label)))()}>{item.label}</button>
+      )}
+    </li>
+  );
   return (
     <nav className={`seller-nav ${open ? 'is-open' : ''}`} id="seller-nav" aria-label="Seller Centre">
       <Link className="seller-nav__home" href="/seller/dashboard" aria-current={pathname === '/seller/dashboard' ? 'page' : undefined}><Icon name="chart" /> Dashboard</Link>
@@ -117,17 +126,19 @@ function SellerNav({ seller, open }) {
             <span>{group.label}</span>
             <Icon name="chevron" className="icon icon--sm seller-nav__chevron" />
           </summary>
-          <ul>
-            {group.items.map((item) => (
-              <li key={item.label}>
-                {item.href ? (
-                  <Link href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</Link>
-                ) : (
-                  <button type="button" onClick={() => (actions[item.action] || (() => notBuilt(item.label)))()}>{item.label}</button>
-                )}
-              </li>
-            ))}
-          </ul>
+          {group.sections ? (
+            <ul>
+              {group.sections.map((section) => {
+                const id = `seller-nav-${section.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+                return (
+                  <li className="seller-nav__section" key={section.label}>
+                    <span className="seller-nav__heading" id={id}>{section.label}</span>
+                    <ul aria-labelledby={id}>{section.items.map(renderItem)}</ul>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : <ul>{group.items.map(renderItem)}</ul>}
         </details>
       ))}
     </nav>

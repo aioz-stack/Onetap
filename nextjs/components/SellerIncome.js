@@ -22,9 +22,9 @@ const VIEWS = [
   ['overview', 'Income Overview', '/seller/income'],
   ['statement', 'Income Statement', '/seller/income/statement'],
   ['details', 'Income Details', '/seller/income/details'],
-  ['payouts', 'My Balance', '/seller/income/payouts'],
-  ['accounts', 'Bank Accounts', '/seller/income/accounts'],
 ];
+// My Balance and Bank Accounts are their own Finance sections, without the My Income tabs.
+const SECTIONS = { payouts: ['My Balance', '/seller/balance'], accounts: ['Bank Accounts', '/seller/bank-accounts'] };
 
 const TEXT = {
   overview: 'Your net income, released weekly every Tuesday at 8:00 AM.',
@@ -103,7 +103,7 @@ function Overview() {
       </section>
       <div className="income-pair">
         <section className="panel" aria-labelledby="income-balance">
-          <div className="panel__head"><h2 id="income-balance">Balance</h2><Link className="link" href="/seller/income/payouts">Withdraw</Link></div>
+          <div className="panel__head"><h2 id="income-balance">Balance</h2><Link className="link" href="/seller/balance">Withdraw</Link></div>
           <StatCards items={[
             { label: 'Available to Withdraw', value: peso(balance.available) },
             { label: 'Total Withdrawn', value: peso(balance.withdrawn) },
@@ -144,7 +144,7 @@ function Overview() {
         </details>
       </section>
       <section className="panel" aria-labelledby="income-recent">
-        <div className="panel__head"><h2 id="income-recent">Recent Payouts</h2><Link className="link" href="/seller/income/payouts">All payouts</Link></div>
+        <div className="panel__head"><h2 id="income-recent">Recent Payouts</h2><Link className="link" href="/seller/balance">All payouts</Link></div>
         <PayoutList payouts={data.payouts.slice(0, 5)} />
       </section>
       <Explainer />
@@ -389,7 +389,7 @@ function WithdrawForm({ available, min, accounts, onDone }) {
       <div className="assistant-form">
         <p>You need a verified bank or e-wallet account to withdraw.</p>
         <p className="muted">{accounts.length ? 'Your saved accounts are still waiting for verification by Onetap.' : 'Add one in Bank Accounts. Onetap verifies it before money can go to it.'}</p>
-        <Link className="btn btn--primary btn--block" href="/seller/income/accounts" onClick={() => Modal.close()}>Go to Bank Accounts</Link>
+        <Link className="btn btn--primary btn--block" href="/seller/bank-accounts" onClick={() => Modal.close()}>Go to Bank Accounts</Link>
       </div>
     );
   }
@@ -635,13 +635,17 @@ function Payouts() {
 }
 
 export function SellerIncome({ view, initial = {} }) {
-  const current = VIEWS.find(([key]) => key === view);
+  const income = VIEWS.find(([key]) => key === view);
+  const title = income ? income[1] : SECTIONS[view][0];
   return (
     <div className="order-page income-page">
-      <PageHead title={current[1]} text={TEXT[view]} />
-      <nav className="order-tabs income-nav" aria-label="My Income">
-        {VIEWS.map(([key, label, href]) => <Link key={key} href={href} aria-current={key === view ? 'page' : undefined}>{label}</Link>)}
-      </nav>
+      <p className="income-eyebrow">Finance{income && ' · My Income'}</p>
+      <PageHead title={title} text={TEXT[view]} />
+      {income && (
+        <nav className="order-tabs income-nav" aria-label="My Income">
+          {VIEWS.map(([key, label, href]) => <Link key={key} href={href} aria-current={key === view ? 'page' : undefined}>{label}</Link>)}
+        </nav>
+      )}
       {view === 'overview' && <Overview />}
       {view === 'statement' && <Statement />}
       {view === 'details' && <Details initial={initial} />}

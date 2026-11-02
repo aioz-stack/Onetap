@@ -445,7 +445,7 @@ export function decidePayout(admin, id, { action, reference, note }) {
     const changed = database.prepare(`UPDATE seller_payouts SET status = ?, ${columns}, processed_by = ? WHERE id = ? AND status = ?`).run(step.to, ...values, admin.username, row.id, row.status).changes;
     if (!changed) throw new ApiError(409, 'This payout has changed. Refresh and try again.');
     const payout = toPayout(row);
-    notifySeller(row.seller, step.title, step.body(payout, action === 'complete' ? ref : text), '/seller/income');
+    notifySeller(row.seller, step.title, step.body(payout, action === 'complete' ? ref : text), '/seller/balance');
     audit(admin, `payout.${action}`, 'payout', row.reference, { seller: row.seller, amount: row.amount, reference: ref || undefined, note: text || undefined });
     database.exec('COMMIT');
   } catch (err) {

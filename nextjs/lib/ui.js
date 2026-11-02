@@ -12,7 +12,7 @@ export function peso(amount) {
 
 // Seller Centre, the Admin Console, the Logistics Partner Panel and the Rider Panel have their own bars in place of the store header and footer.
 export function isSellerApp(pathname) {
-  return ['/seller/dashboard', '/seller/orders', '/seller/products', '/seller/chat', '/seller/income', '/admin', '/courier', '/rider'].some((path) => pathname.startsWith(path));
+  return ['/seller/dashboard', '/seller/orders', '/seller/products', '/seller/chat', '/seller/income', '/seller/balance', '/seller/bank-accounts', '/admin', '/courier', '/rider'].some((path) => pathname.startsWith(path));
 }
 
 export function notBuilt(label) {

@@ -486,6 +486,10 @@ button.topnav__item:hover, a.topnav__item:hover, .topnav__follow a:hover { color
 }
 .seller-nav__group li button:hover, .seller-nav__group li a:hover { background: var(--surface-2); color: var(--link); }
 .seller-nav__group li a[aria-current] { background: var(--surface-2); color: var(--link); font-weight: 700; }
+/* A group split into sections, like Finance: a small heading over each section's pages. */
+.seller-nav__section + .seller-nav__section { margin-top: 6px; }
+.seller-nav__heading { display: block; padding: 6px 10px 2px 38px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; }
+.seller-nav__section li a, .seller-nav__section li button { padding-left: 48px; }
 
 .seller-content {
   display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start;
@@ -1073,6 +1077,7 @@ button.topnav__item:hover, a.topnav__item:hover, .topnav__follow a:hover { color
 }
 /* Seller Centre: My Income */
 .income-page { gap: 14px; }
+.income-eyebrow { margin: 0 0 -10px; color: var(--muted); font-size: 13px; font-weight: 600; }
 .income-nav a { flex: 1 0 auto; padding: 7px 12px; border-radius: 9px; color: var(--muted); font-size: 14px; font-weight: 600; text-align: center; white-space: nowrap; text-decoration: none; }
 .income-nav a:hover { color: var(--text); }
 .income-nav a[aria-current="page"] { background: var(--surface); color: var(--link); box-shadow: var(--shadow); }

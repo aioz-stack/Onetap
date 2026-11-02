@@ -1,7 +1,6 @@
-import { SellerIncome } from '@/components/SellerIncome';
+import { redirect } from 'next/navigation';
 
-export const metadata = { title: 'My Balance' };
-
-export default function IncomePayoutsPage() {
-  return <SellerIncome view="payouts" />;
+// My Balance moved to its own Finance section. Older links and notifications still land there.
+export default function OldBalancePage() {
+  redirect('/seller/balance');
 }

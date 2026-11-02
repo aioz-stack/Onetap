@@ -111,7 +111,7 @@ There are no automated tests or linters. Verify changes in a browser, in both th
 - `/seller/application` shows a seller their application status, at any stage
 - `/seller/orders` My Orders, plus `/to-ship`, `/pickups` (Pickup Requests), `/returns` (Return / Refunds / Cancel) and `/[id]` for one order. All require a seller session. `?tab=` opens a tab on the My Orders, To Ship and Return / Refunds / Cancel pages
 - `/seller/products` My Products, plus `/new`, `/[id]/edit`, `/standard` and `/optimiser`. All require a seller session. `?tab=` opens a My Products tab and `/new?template=` starts from a template
-- `/seller/income` Income Overview, plus `/statement`, `/details`, `/payouts` (My Balance) and `/accounts` (Bank Accounts). All require a seller session
+- Finance has three sidebar sections (`sections` in `SELLER_NAV`): My Income (`/seller/income`, plus `/statement` and `/details`, with tabs between them), My Balance (`/seller/balance`) and Bank Accounts (`/seller/bank-accounts`). All require a seller session. The older `/seller/income/payouts` and `/seller/income/accounts` redirect to them
 - `/seller/chat` Chat Management and `/seller/chat/inbox`, where `?thread=` opens a conversation. Both require a seller session
 - `/checkout` and `/orders`, plus `/orders/[id]`, require a customer session
 - `/profile` My Profile, for a signed-in customer at any approval stage
