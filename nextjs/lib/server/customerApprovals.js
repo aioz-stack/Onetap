@@ -6,9 +6,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { ID_NUMBER } from '../schemas';
+import { CUSTOMER_PROFILE_SECTIONS, ID_NUMBER } from '../schemas';
 import { audit } from './admin';
-import { registerAccount } from './auth';
+import { checkFields, registerAccount } from './auth';
 import { getDb, UPLOAD_DIR } from './db';
 import { ApiError } from './errors';
 import { csvResponse, dateRange, isoDate, listQuery, search } from './lists';
@@ -54,7 +54,8 @@ function checkIdFree(id, file, username = '') {
   if (db().prepare("SELECT 1 FROM customer_approvals WHERE id_key = ? AND status <> 'rejected' AND username <> ?").get(id.key, username)) {
     throw new ApiError(409, 'This ID number is already registered to another account.', { idNumber: 'This ID number is already registered to another account.' });
   }
-  if (db().prepare("SELECT 1 FROM customer_approvals WHERE id_hash = ? AND status <> 'rejected' AND username <> ?").get(file.hash, username)) {
+  // Accounts from before approvals have no photo, so an empty hash is never a match.
+  if (file.hash && db().prepare("SELECT 1 FROM customer_approvals WHERE id_hash = ? AND status <> 'rejected' AND username <> ?").get(file.hash, username)) {
     throw new ApiError(409, 'This ID photo is already registered to another account.', { validId: 'This ID photo is already registered to another account. Take a new photo of your own ID.' });
   }
 }
@@ -118,32 +119,86 @@ export function approvalFor(username) {
   };
 }
 
-// A rejected customer sends a new ID photo and number, and waits as Pending again.
-export async function resubmitApproval(username, request) {
+// Sends the account back to Pending, for an administrator to check again. Runs inside the caller's transaction.
+function sendForReview(row, action, title, body, fields = '', values = []) {
+  const time = now();
+  const changed = db().prepare(`UPDATE customer_approvals SET status = 'pending', reason = ''${fields}, submitted_at = ?, decided_at = NULL, decided_by = '', updated_at = ? WHERE username = ? AND status = ?`)
+    .run(...values, time, time, row.username, row.status).changes;
+  if (!changed) throw new ApiError(409, 'Your account has changed. Refresh and try again.');
+  record(row.username, action, row.username);
+  notifyCustomer(row.username, title, body, '/profile');
+}
+
+// A customer changes their valid ID: a new photo, a new number, or both. At any stage this sends
+// the account for approval again. A rejected customer applies again the same way.
+export async function updateIdentity(username, request) {
   const row = findApproval(username);
-  if (row.status !== 'rejected') throw new ApiError(409, row.status === 'approved' ? 'Your account is already approved.' : 'Your registration is already waiting for review.');
   const form = await request.formData();
   const id = readIdNumber(form.get('idNumber'));
-  const file = await readValidId(form);
-  checkIdFree(id, file, row.username);
-  const stored = storeId(file);
-  const time = now();
+  const upload = form.get('validId');
+  const file = upload instanceof File && upload.size ? await readValidId(form) : null;
+  if (!file && !row.id_stored) throw invalid('validId', 'Upload a clear photo of your valid ID.');
+  if (!file && id.key === row.id_key) throw invalid('idNumber', 'Change your ID number or choose a new photo to update your ID.');
+  checkIdFree(id, file || { hash: row.id_hash }, row.username);
+  const stored = file ? storeId(file) : null;
   const database = db();
   database.exec('BEGIN IMMEDIATE');
   try {
-    const changed = database.prepare(`UPDATE customer_approvals SET status = 'pending', reason = '', id_number = ?, id_key = ?, id_name = ?, id_mime = ?, id_size = ?, id_stored = ?, id_hash = ?, submitted_at = ?, decided_at = NULL, decided_by = '', updated_at = ?
-      WHERE username = ? AND status = 'rejected'`).run(id.number, id.key, file.name, file.mime, file.bytes.length, stored, file.hash, time, time, row.username).changes;
-    if (!changed) throw new ApiError(409, 'Your registration has changed. Refresh and try again.');
-    record(row.username, 'resubmitted', row.username);
-    notifyCustomer(row.username, 'Registration resubmitted', 'Your new ID is waiting for approval.', '/');
+    const photo = file ? ', id_name = ?, id_mime = ?, id_size = ?, id_stored = ?, id_hash = ?' : '';
+    sendForReview(row, 'resubmitted', 'Valid ID sent for approval', 'We check your updated ID, then your account is active again.',
+      `, id_number = ?, id_key = ?${photo}`, [id.number, id.key, ...(file ? [file.name, file.mime, file.bytes.length, stored, file.hash] : [])]);
     database.exec('COMMIT');
   } catch (err) {
     database.exec('ROLLBACK');
-    rmSync(path.join(ID_DIR, stored), { force: true });
+    if (stored) rmSync(path.join(ID_DIR, stored), { force: true });
     throw duplicate(err);
   }
-  if (row.id_stored) rmSync(path.join(ID_DIR, row.id_stored), { force: true });
-  return approvalFor(row.username);
+  if (file && row.id_stored) rmSync(path.join(ID_DIR, row.id_stored), { force: true });
+  return profileFor(row.username);
+}
+
+// The name on the account must match the ID, so changing it is checked again too.
+export const IDENTITY_FIELDS = ['firstName', 'middleName', 'lastName', 'suffix'];
+const EDITABLE = CUSTOMER_PROFILE_SECTIONS.flatMap((section) => section.fields);
+
+// A customer edits their email, contact number, name and address. A changed name sends the
+// account for approval again, in the same transaction.
+export function updateProfile(username, input) {
+  if (typeof input !== 'object' || input === null) throw new ApiError(400, 'That request could not be read.');
+  const row = findApproval(username);
+  checkFields(EDITABLE, input);
+  const profile = JSON.parse(row.profile);
+  const email = String(input.email).trim().toLowerCase();
+  if (email !== row.email && db().prepare('SELECT 1 FROM customers WHERE email = ? AND username <> ?').get(email, row.username)) {
+    throw new ApiError(409, 'An account with this email already exists.', { email: 'An account with this email already exists.' });
+  }
+  const next = { ...profile, ...Object.fromEntries(EDITABLE.filter((field) => field.name !== 'email').map(({ name }) => [name, String(input[name] ?? '').trim()])) };
+  const nameChanged = IDENTITY_FIELDS.some((name) => (next[name] || '') !== (profile[name] || ''));
+  const changed = email !== row.email || EDITABLE.some(({ name }) => name !== 'email' && next[name] !== (profile[name] ?? ''));
+  if (!changed) throw new ApiError(422, 'Nothing has changed yet.');
+  const database = db();
+  database.exec('BEGIN IMMEDIATE');
+  try {
+    database.prepare('UPDATE customers SET email = ?, profile = ? WHERE username = ?').run(email, JSON.stringify(next), row.username);
+    if (nameChanged && row.status !== 'pending') sendForReview(row, 'details_changed', 'Name change sent for approval', 'Your name must match your valid ID, so we check it again before you can buy.');
+    database.exec('COMMIT');
+  } catch (err) {
+    database.exec('ROLLBACK');
+    if (/UNIQUE/.test(err.message)) throw new ApiError(409, 'An account with this email already exists.', { email: 'An account with this email already exists.' });
+    throw err;
+  }
+  return { ...profileFor(row.username), reviewing: nameChanged && row.status !== 'pending' };
+}
+
+// Everything My Profile shows. The ID number is the customer's own, so it is shown in full.
+export function profileFor(username) {
+  const row = findApproval(username);
+  const profile = JSON.parse(row.profile);
+  return {
+    username: row.username, email: row.email, profile, registeredAt: row.registered_at,
+    approval: { status: row.status, reason: row.status === 'rejected' ? row.reason : '', submittedAt: row.submitted_at, decidedAt: row.decided_at, verifiedBefore: Boolean(row.approved_at) },
+    idNumber: row.id_number, idFile: row.id_stored ? { name: row.id_name, size: row.id_size, at: row.updated_at } : null,
+  };
 }
 
 export function validIdResponse(username) {
@@ -172,7 +227,7 @@ function toSummary(row) {
   const profile = JSON.parse(row.profile);
   return {
     username: row.username, email: row.email, name: fullName(profile), contact: profile.contact, city: profile.city, idNumber: row.id_number, hasId: Boolean(row.id_stored),
-    status: row.status, reason: row.reason, registeredAt: row.registered_at, submittedAt: row.submitted_at, decidedAt: row.decided_at, decidedBy: row.decided_by,
+    status: row.status, reason: row.reason, registeredAt: row.registered_at, submittedAt: row.submitted_at, decidedAt: row.decided_at, decidedBy: row.decided_by, verifiedBefore: Boolean(row.approved_at),
   };
 }
 
@@ -228,8 +283,8 @@ export function decideCustomer(admin, username, action, reason) {
   const database = db();
   database.exec('BEGIN IMMEDIATE');
   try {
-    const changed = database.prepare('UPDATE customer_approvals SET status = ?, reason = ?, decided_at = ?, decided_by = ?, updated_at = ? WHERE username = ? AND status = ?')
-      .run(decision.status, decision.needsReason ? text : '', now(), admin.username, now(), row.username, row.status).changes;
+    const changed = database.prepare(`UPDATE customer_approvals SET status = ?, reason = ?, decided_at = ?, decided_by = ?, updated_at = ?${decision.status === 'approved' ? ', approved_at = COALESCE(approved_at, ?)' : ''} WHERE username = ? AND status = ?`)
+      .run(decision.status, decision.needsReason ? text : '', now(), admin.username, now(), ...(decision.status === 'approved' ? [now()] : []), row.username, row.status).changes;
     if (!changed) throw new ApiError(409, 'This registration has changed. Refresh and try again.');
     record(row.username, action, admin.username, text);
     notifyCustomer(row.username, decision.title, decision.body(text), '/');

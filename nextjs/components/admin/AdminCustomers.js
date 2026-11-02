@@ -9,7 +9,7 @@ import { confirmModal } from '../SellerProducts';
 import { CUSTOMER_APPROVAL_STATUS } from '@/lib/adminLabels';
 import { Modal, toast } from '@/lib/ui';
 
-const ACTIONS = { submitted: 'Registered', resubmitted: 'Sent a new ID', approve: 'Approved', reject: 'Rejected' };
+const ACTIONS = { submitted: 'Registered', resubmitted: 'Updated their valid ID', details_changed: 'Changed their name', approve: 'Approved', reject: 'Rejected' };
 const path = (username) => `/customers/${encodeURIComponent(username)}`;
 
 function RejectForm({ onSubmit }) {
@@ -67,6 +67,7 @@ function CustomerDetail({ username, onChanged }) {
     <div className="assistant-form">
       <div className="approval-head">
         <Badge status={CUSTOMER_APPROVAL_STATUS[status]} />
+        {status === 'pending' && customer.verifiedBefore && <span className="order-badge order-badge--info">Re-verification</span>}
         <span className="muted">Registered {dateTime(customer.registeredAt)}{customer.decidedAt && ` · ${CUSTOMER_APPROVAL_STATUS[status].label.toLowerCase()} ${dateTime(customer.decidedAt)} by ${customer.decidedBy}`}</span>
       </div>
       {customer.reason && <p className="order-card__note"><strong>Reason:</strong> {customer.reason}</p>}
@@ -177,7 +178,7 @@ export function AdminCustomers({ initial }) {
           { label: 'Email', render: (row) => row.email },
           { label: 'Contact', render: (row) => row.contact || '—' },
           { label: 'ID number', render: (row) => row.idNumber || '—' },
-          { label: 'Status', sort: 'status', render: (row) => <Badge status={CUSTOMER_APPROVAL_STATUS[row.status]} /> },
+          { label: 'Status', sort: 'status', render: (row) => <>{<Badge status={CUSTOMER_APPROVAL_STATUS[row.status]} />}{row.status === 'pending' && row.verifiedBefore && <small className="muted"> re-verification</small>}</> },
           { label: 'Registered', sort: 'submitted', render: (row) => dateTime(row.submittedAt) },
           { label: 'Reviewed', sort: 'decided', render: (row) => (row.decidedAt ? `${dateTime(row.decidedAt)} · ${row.decidedBy}` : '—') },
         ]}

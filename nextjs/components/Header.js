@@ -147,14 +147,15 @@ function AuthSlot({ t }) {
     <div className="topnav__auth">
       {user ? (
         <>
-          {user.approvalStatus === 'approved' && <Link className="topnav__item topnav__user" href="/orders">{t.myPurchases}</Link>}
+          <Link className="topnav__item topnav__user" href="/profile" aria-current={pathname === '/profile' ? 'page' : undefined}>{t.myProfile}</Link>
+          {(user.approvalStatus === 'approved' || user.verifiedBefore) && <Link className="topnav__item" href="/orders">{t.myPurchases}</Link>}
           <button
             className="topnav__item"
             type="button"
             onClick={async () => {
               await Auth.logout('customer');
               toast('You have been logged out.');
-              if (pathname.startsWith('/orders') || pathname === '/checkout') router.push('/');
+              if (pathname.startsWith('/orders') || pathname === '/checkout' || pathname === '/profile') router.push('/');
             }}
           >
             {t.logout}

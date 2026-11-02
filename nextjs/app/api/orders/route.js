@@ -1,8 +1,8 @@
-import { customerFrom } from '@/lib/server/auth';
+import { customerFrom, customerOrdersFrom } from '@/lib/server/auth';
 import { listCustomerOrders, placeOrders } from '@/lib/server/orders';
 import { route } from '@/lib/server/route';
 
-export const GET = route(async (request) => Response.json({ orders: listCustomerOrders(customerFrom(request).username) }));
+export const GET = route(async (request) => Response.json({ orders: listCustomerOrders(customerOrdersFrom(request).username) }));
 
 export const POST = route(async (request) => {
   const customer = customerFrom(request);

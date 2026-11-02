@@ -181,12 +181,12 @@ export const SHOP_AUTO_REPLIES = [
 export const I18N = {
   en: {
     sellerCentre: 'Seller Centre', startSelling: 'Start Selling', downloadApp: 'Download App', followUs: 'Follow us on',
-    notifications: 'Notifications', help: 'Help', signUp: 'Sign Up', login: 'Login', logout: 'Log Out', myPurchases: 'My Purchases', search: 'Search', hotDeals: 'Hot Deals:',
+    notifications: 'Notifications', help: 'Help', signUp: 'Sign Up', login: 'Login', logout: 'Log Out', myPurchases: 'My Purchases', myProfile: 'My Profile', search: 'Search', hotDeals: 'Hot Deals:',
     searchPlaceholder: 'Sign up & get ₱150 OFF your first order | Search deals, brands & items',
   },
   fil: {
     sellerCentre: 'Seller Centre', startSelling: 'Magbenta', downloadApp: 'I-download ang App', followUs: 'I-follow kami sa',
-    notifications: 'Mga Abiso', help: 'Tulong', signUp: 'Mag-sign Up', login: 'Mag-login', logout: 'Mag-log Out', myPurchases: 'Aking mga Binili', search: 'Hanapin', hotDeals: 'Mainit na Deals:',
+    notifications: 'Mga Abiso', help: 'Tulong', signUp: 'Mag-sign Up', login: 'Mag-login', logout: 'Mag-log Out', myPurchases: 'Aking mga Binili', myProfile: 'Aking Profile', search: 'Hanapin', hotDeals: 'Mainit na Deals:',
     searchPlaceholder: 'Mag-sign up at makakuha ng ₱150 OFF sa unang order | Maghanap ng deals at produkto',
   },
 };

@@ -68,9 +68,10 @@ function applicationStatus(username) {
 }
 
 // customer_approvals is the only source of a customer's status. No row counts as pending.
+// `verifiedBefore` means approved once, and now waiting to be re-verified after a change.
 function customerApproval(username) {
-  const row = getDb().prepare('SELECT status, reason FROM customer_approvals WHERE username = ?').get(username);
-  return { approvalStatus: row?.status || 'pending', approvalReason: row?.status === 'rejected' ? row.reason : '' };
+  const row = getDb().prepare('SELECT status, reason, approved_at FROM customer_approvals WHERE username = ?').get(username);
+  return { approvalStatus: row?.status || 'pending', approvalReason: row?.status === 'rejected' ? row.reason : '', verifiedBefore: Boolean(row?.approved_at) };
 }
 
 function toAccount(role, row) {
@@ -143,11 +144,47 @@ export const CUSTOMER_NOT_APPROVED = {
   rejected: 'Your registration was not approved. Update your valid ID to apply again.',
 };
 
-// For buying, orders and shop chat: only approved customers.
+const REVERIFYING = 'Your updated details are waiting for approval. You can buy and chat with shops again once they are approved.';
+
+// For buying and shop chat: only approved customers.
 export function customerFrom(request) {
   const customer = customerAccountFrom(request);
-  if (customer.approvalStatus !== 'approved') throw new ApiError(403, CUSTOMER_NOT_APPROVED[customer.approvalStatus] || CUSTOMER_NOT_APPROVED.pending);
+  if (customer.approvalStatus !== 'approved') throw new ApiError(403, customer.verifiedBefore ? REVERIFYING : CUSTOMER_NOT_APPROVED[customer.approvalStatus] || CUSTOMER_NOT_APPROVED.pending);
   return customer;
+}
+
+// For a customer's existing orders: approved now, or approved before and being re-verified, so
+// a change of ID never cuts them off from orders already on their way.
+export function customerOrdersFrom(request) {
+  const customer = customerAccountFrom(request);
+  if (customer.approvalStatus !== 'approved' && !customer.verifiedBefore) throw new ApiError(403, CUSTOMER_NOT_APPROVED[customer.approvalStatus] || CUSTOMER_NOT_APPROVED.pending);
+  return customer;
+}
+
+// A signed-in customer changes their password. Other devices are signed out, this one stays.
+export async function changeCustomerPassword(request, { current, next, confirm }) {
+  const customer = customerAccountFrom(request);
+  const key = `customer-password|${customer.username}`;
+  checkAttempts(key);
+  const db = getDb();
+  const row = db.prepare('SELECT password FROM customers WHERE username = ?').get(customer.username);
+  if (typeof current !== 'string' || current.length > MAX_PASSWORD || !await checkPassword(current, row.password)) {
+    recordFailure(key);
+    throw new ApiError(422, 'Your current password is not right.', { current: 'Your current password is not right.' });
+  }
+  if (typeof next !== 'string' || next.length < 8 || next.length > MAX_PASSWORD) throw new ApiError(422, 'Use 8 to 128 characters.', { next: 'Use 8 to 128 characters.' });
+  if (next === current) throw new ApiError(422, 'Choose a password you are not using now.', { next: 'Choose a password you are not using now.' });
+  if (next !== confirm) throw new ApiError(422, 'The passwords do not match.', { confirm: 'The passwords do not match.' });
+  const hash = await hashPassword(next);
+  const token = request.cookies.get(ROLES.customer.cookie)?.value || '';
+  db.prepare('UPDATE customers SET password = ? WHERE username = ?').run(hash, customer.username);
+  db.prepare('DELETE FROM customer_sessions WHERE username = ? AND token_hash <> ?').run(customer.username, tokenHash(token));
+  db.prepare('DELETE FROM login_attempts WHERE key = ?').run(key);
+}
+
+// Checks fields against their schema, for registration and profile edits alike.
+export function checkFields(fields, data) {
+  validateAccount([{ fields }], data);
 }
 
 // Ends every session for an account, for password changes and disabled administrators.

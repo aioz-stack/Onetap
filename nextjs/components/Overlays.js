@@ -141,16 +141,16 @@ export function CustomerApprovalBanner() {
   const status = customer?.approvalStatus;
   if (!customer || !status || status === 'approved' || isSellerApp(pathname)) return null;
   const rejected = status === 'rejected';
+  const again = customer.verifiedBefore;
   return (
     <div className={`approval-banner${rejected ? ' approval-banner--rejected' : ''}`} role="status">
       <div className="container approval-banner__row">
         <Icon name={rejected ? 'shield' : 'clock'} />
         <p>
-          {rejected ? (
-            <><strong>Your registration was not approved.</strong> {customer.approvalReason && <>Reason: {customer.approvalReason} </>}Send a new photo of your valid ID to apply again.</>
-          ) : (
-            <><strong>Your account is waiting for approval.</strong> You can browse and fill your cart. Checkout, My Purchases and shop chat open once our team checks your valid ID.</>
-          )}
+          {rejected && <><strong>{again ? 'Your updated details were not approved.' : 'Your registration was not approved.'}</strong> {customer.approvalReason && <>Reason: {customer.approvalReason} </>}Send a new photo of your valid ID to apply again.</>}
+          {!rejected && again && <><strong>Your updated details are waiting for approval.</strong> Your orders stay in My Purchases. Checkout and shop chat open again once our team checks them.</>}
+          {!rejected && !again && <><strong>Your account is waiting for approval.</strong> You can browse and fill your cart. Checkout, My Purchases and shop chat open once our team checks your valid ID.</>}
+          {pathname !== '/profile' && <> <Link className="link" href="/profile">View My Profile</Link></>}
         </p>
         {rejected && <button className="btn btn--primary" type="button" onClick={() => Modal.open({ title: 'Send a new valid ID', content: <ResubmitForm /> })}>Send New ID</button>}
       </div>

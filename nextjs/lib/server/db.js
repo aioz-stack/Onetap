@@ -585,6 +585,10 @@ export function getDb() {
   if (firstCustomerApprovals) {
     database.exec("INSERT OR IGNORE INTO customer_approvals (username, status, submitted_at, decided_at, decided_by, updated_at) SELECT username, 'approved', created_at, created_at, 'existing account', created_at FROM customers");
   }
+  // When a customer was first approved. It stays set while they are re-verified after changing
+  // their ID or name, so they keep their orders but can't buy until approved again.
+  addColumns(database, 'customer_approvals', { approved_at: 'INTEGER' });
+  database.exec("UPDATE customer_approvals SET approved_at = COALESCE(decided_at, submitted_at) WHERE status = 'approved' AND approved_at IS NULL");
   // Products no longer wait for approval, so anything still waiting goes on sale.
   database.exec("UPDATE products SET status = 'live' WHERE status = 'review'");
   seedPartners(database);

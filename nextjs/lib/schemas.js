@@ -94,6 +94,35 @@ export const CUSTOMER_SCHEMA = [ACCOUNT_SECTION, PERSONAL_SECTION, addressSectio
 // A rejected customer applies again with a new photo of their ID and its number.
 export const CUSTOMER_RESUBMIT_SCHEMA = [{ fields: [VALID_ID, { ...ID_NUMBER, wide: true }] }];
 
+// What a customer can edit in My Profile. The username can't change. Changing the name sends the
+// account for approval again, because it must match the ID.
+export const CUSTOMER_PROFILE_SECTIONS = [
+  { legend: 'Contact', fields: [ACCOUNT_SECTION.fields[2], ACCOUNT_SECTION.fields[3]] },
+  PERSONAL_SECTION,
+  addressSection('Complete Address', 'City / Municipality'),
+];
+
+export const customerProfileSchema = (account) => CUSTOMER_PROFILE_SECTIONS.map((section) => ({
+  ...section,
+  fields: section.fields.map((field) => ({ ...field, value: (field.name === 'email' ? account.email : account.profile[field.name]) ?? field.value })),
+}));
+
+// Updating the ID keeps the current photo unless a new one is chosen.
+export const customerIdentitySchema = (account) => [{
+  fields: [
+    { ...VALID_ID, label: 'New Valid ID photo', optional: Boolean(account.idFile), hint: account.idFile ? 'Leave empty to keep your current photo. JPG, PNG or WebP, up to 10 MB.' : VALID_ID.hint },
+    { ...ID_NUMBER, value: account.idNumber, wide: true },
+  ],
+}];
+
+export const CUSTOMER_PASSWORD_SCHEMA = [{
+  fields: [
+    { name: 'current', label: 'Current Password', type: 'password', autocomplete: 'current-password', wide: true },
+    { name: 'next', label: 'New Password', type: 'password', autocomplete: 'new-password', minlength: 8, maxlength: 128, hint: 'At least 8 characters.', wide: true },
+    { name: 'confirm', label: 'Confirm New Password', type: 'password', autocomplete: 'new-password', minlength: 8, maxlength: 128, wide: true },
+  ],
+}];
+
 export const LOGIN_SCHEMA = [{
   fields: [
     { name: 'identifier', label: 'Username / Email', autocomplete: 'username', wide: true },
