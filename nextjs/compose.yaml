@@ -1,0 +1,17 @@
+name: onetap
+
+services:
+  web:
+    build: .
+    image: onetap-web:latest
+    ports:
+      - "3001:3000"
+    # Holds ONETAP_SECRET_KEY and the first administrator. See AGENTS.md.
+    env_file: .env
+    volumes:
+      - onetap-data:/data
+    restart: unless-stopped
+
+# Holds the database and uploads. Survives rebuilds and `docker compose down`.
+volumes:
+  onetap-data:

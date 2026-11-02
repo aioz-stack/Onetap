@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Onetap">
+  <rect width="48" height="48" rx="13" fill="#fff"/>
+  <path d="M11.500 12h25a2.500 2.500 0 0 1 2.500 2.300l1.500 22a4 4 0 0 1-4 4.200H11.500a4 4 0 0 1-4-4.200l1.500-22a2.500 2.500 0 0 1 2.500-2.300z" fill="#1d4ed8"/>
+  <path d="M17 18v2.500a7 7 0 0 0 14 0V18" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="34.500" cy="33.500" r="6.500" fill="#fbbf24" stroke="#fff" stroke-width="2.500"/>
+</svg>

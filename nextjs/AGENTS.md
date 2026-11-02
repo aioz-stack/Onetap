@@ -1,0 +1,195 @@
+# AGENTS.md
+
+Guide for coding agents working on the Next.js version of Onetap, a mall and marketplace storefront. It uses the App Router, React and plain JavaScript, with no TypeScript. Accounts, sessions, products, orders, shop chats, pickups, shipments and COD records are stored on the server in SQLite. Everything else still lives in the visitor's browser.
+
+## Run it
+
+Run these from `nextjs/`:
+
+```bash
+npm install
+```
+
+```bash
+npm run dev
+```
+
+Then open http://localhost:3000. Use `npm run build` to check production output.
+
+To run the production build in Docker instead:
+
+```bash
+docker compose up -d --build
+```
+
+Then open http://localhost:3001. It uses host port 3001 so it can run beside `npm run dev`. The container restarts with Docker until you run `docker compose down`, and it does not pick up code changes until you rebuild. Accounts, orders, products, chats and uploads are in the `onetap-data` volume, which survives rebuilds. `docker compose down -v` deletes them.
+
+Locally they go in `nextjs/data/`, or wherever `ONETAP_DATA_DIR` points. The database needs Node 22.13 or later for the built-in `node:sqlite` driver.
+
+There are no automated tests or linters. Verify changes in a browser, in both themes and at phone width (375px).
+
+## Server secrets
+
+`nextjs/.env` holds `ONETAP_SECRET_KEY` (32 random bytes in base64, which encrypts courier credentials) and `ONETAP_ADMIN_USERNAME` and `ONETAP_ADMIN_PASSWORD` (the first administrator, created on the first login when no admin exists). It is ignored by git and Docker builds, and passed to the container by `compose.yaml`. Never commit it, and don't change the key once credentials are saved, because they can't be read afterwards. Change the admin password from the Admin Console after signing in.
+
+## Layout
+
+| Path | Purpose |
+| --- | --- |
+| `app/layout.js` | Root layout, metadata, font, theme bootstrap script, app-wide hosts |
+| `app/globals.css` | All styles. Theme tokens are at the top |
+| `app/**/page.js` | Routes. Thin server components that render a component |
+| `public/icons.svg` | SVG icon sprite |
+| `Dockerfile`, `compose.yaml` | Production image and container, using Next's standalone output |
+| `lib/data.js` | Content and config: store links, products, FAQs, translations |
+| `lib/store.js` | `Store`, `useStored`, `useHydrated`, `Auth` (account API client), `FieldError` |
+| `lib/ui.js` | `peso`, `toast`, `Modal`, `Theme`, `useLanguage`, `createState` |
+| `lib/schemas.js` | Form schemas |
+| `lib/chat.js` | `ChatApi`, `Chat`, `chatState` and sample-shop `Threads` |
+| `components/Header.js` | Top bar, popovers, Download App QR, search |
+| `components/Storefront.js` | Search and category state, product grid, cart, carousel |
+| `components/Forms.js` | `Sections` and `Form` |
+| `components/Auth.js` | Customer login, sign-up and forgot password; Seller Centre login and registration |
+| `components/SellerShell.js` | Seller Centre frame: session guard, top bar and sidebar |
+| `components/SellerDashboard.js` | Seller dashboard panels |
+| `components/SellerOrders.js` | Seller order pages, order actions and waybill |
+| `lib/orders.js` | `useOrders`, the `Orders` API client, status labels and tab helpers |
+| `lib/server/couriers/` | `callCourier` (retries, logging), and `sandbox.js` with the simulator and the production placeholder |
+| `lib/server/pickups.js` | Pickup requests, approval, courier selection, booking and automatic retries |
+| `lib/server/shipments.js` | Booking, webhooks, and keeping orders and shipments in step |
+| `lib/server/courierPanel.js` | Logistics Partner Panel: `courierRoute`, `pageCourier`, partner-scoped queries, status reports |
+| `lib/server/courierUsers.js` | Courier Panel logins: creating, editing, resetting and deactivating them, and `panelAccess` |
+| `lib/server/bookingRetries.js`, `instrumentation.js` | The background timer that retries bookings after a temporary courier failure |
+| `lib/server/uploads.js` | `saveUpload`, which checks a file's bytes before storing it |
+| `lib/server/logistics.js` | Logistics partners and API integrations |
+| `lib/server/cod.js` | COD records, remittances and reports |
+| `lib/server/moderation.js` | Product listings and suspension |
+| `lib/server/applications.js` | Seller registration approval and private documents |
+| `lib/server/admin.js` | `adminRoute`, `pageAdmin`, `audit` and team management |
+| `lib/server/overview.js` | Admin overview, audit and API log lists |
+| `lib/server/lists.js` | Server-side search, filter, sort, paging and CSV |
+| `lib/adminRoles.js`, `lib/adminLabels.js` | Admin roles and permissions, and status labels |
+| `components/SellerApplication.js` | The status page for applicants |
+| `components/admin/` | Admin Console pages, with shared parts in `AdminUI.js` |
+| `components/courier/CourierPanel.js` | Logistics Partner Panel pages |
+| `components/courier/CourierRiders.js` | Rider Management, assignment history, rider performance, and the rider part of a shipment's details |
+| `lib/server/riders.js` | Riders, their licenses and logins, assigning them, and the Rider Panel's API |
+| `lib/server/tracking.js` | The ten-milestone shipping tracking history on seller and buyer order pages |
+| `lib/server/proofs.js` | Private proof-of-delivery photos and who may open them |
+| `lib/server/collections.js` | Financial records for delivered orders, the commission rate, and collection reports |
+| `lib/server/riderCash.js` | Riders' daily COD collections and handing the cash to their courier |
+| `lib/server/riderTasks.js` | Closes rider tasks when a shipment moves, and which rider an order shows |
+| `components/rider/RiderApp.js` | The Rider Panel |
+| `components/SellerPickups.js` | Pickup Requests in Seller Centre |
+| `lib/purchases.js` | Buyer order API client and `usePurchases` |
+| `components/Checkout.js` | Checkout page |
+| `components/CustomerOrders.js` | My Purchases and buyer order detail |
+| `components/SellerProducts.js` | My Products, Onetap Standard Product, Product AI Optimiser, `confirmModal` |
+| `components/ProductForm.js` | Add and edit product form |
+| `components/RichText.js` | Description editor and `RichText` display |
+| `lib/products.js` | Product rules shared by the form and the API: validation, stock, shipping fees, review, quality checks |
+| `lib/productsApi.js` | Browser API client, `useSellerProducts`, upload checks |
+| `lib/server/` | Server only: `db.js` (SQLite), `auth.js` (seller and customer accounts and sessions), `products.js`, `orders.js` and `chat.js` (queries and rules), `route.js` and `errors.js` (error handling) |
+| `app/api/` | `admin`, `courier`, `rider`, `webhooks/couriers`, `logistics/options`, `seller/auth`, `customer/auth`, `customer/notifications`, `chat`, `orders`, `seller/chat`, `seller/notifications`, `seller/orders`, `seller/pickups`, `seller/products`, `products` (public live list) and `uploads` routes |
+| `components/Support.js` | Help Centre, FAQ search, live chat and tickets, tracking, policy |
+| `components/ChatBox.js` | Bottom-left customer and seller chat, and `Bubble` |
+| `components/SellerChat.js` | Chat Management and the seller inbox |
+| `components/Overlays.js` | Modal and toast hosts, footer, route focus |
+
+## Routes
+
+- `/` home, with `#products` for the deals section
+- `/seller/login` and `/seller/register` Seller Centre portal
+- `/seller/dashboard` requires an approved seller
+- `/seller/application` shows a seller their application status, at any stage
+- `/seller/orders` My Orders, plus `/to-ship`, `/pickups` (Pickup Requests), `/returns` (Return / Refunds / Cancel) and `/[id]` for one order. All require a seller session. `?tab=` opens a tab on the My Orders, To Ship and Return / Refunds / Cancel pages
+- `/seller/products` My Products, plus `/new`, `/[id]/edit`, `/standard` and `/optimiser`. All require a seller session. `?tab=` opens a My Products tab and `/new?template=` starts from a template
+- `/seller/chat` Chat Management and `/seller/chat/inbox`, where `?thread=` opens a conversation. Both require a seller session
+- `/checkout` and `/orders`, plus `/orders/[id]`, require a customer session
+- `/help` Help Centre
+- `/admin` Admin Console, plus `/logistics`, `/api`, `/pickups`, `/shipments`, `/cod`, `/collections`, `/sellers`, `/products`, `/audit` and `/team`. `/admin/login` signs in. Pages and APIs both check the role
+- `/courier` Logistics Partner Panel, plus `/pickups`, `/shipments`, `/cod`, `/reports`, `/riders` (Rider Management), `/riders/assignments`, `/riders/performance` and `/riders/remittances`. `/courier/login` signs in. Adding a partner creates its first login, and administrators manage logins from Logistics Partners, under Panel Users
+- `/rider` the Rider Panel (My Tasks), plus `/rider/collections` and `/rider/remittances`, and `/rider/login`. Riders sign in with the username and password their partner set when registering them
+
+Signed-in seller pages live in the `app/seller/(centre)` route group. Its layout checks the session on the server, redirects to `/seller/login` without one and to `/seller/application` if the seller is not approved, and wraps the page in `SellerShell`. Add new pages there and to `isSellerApp` in `lib/ui.js`, which hides the store header and footer. The chat box, modal and toasts stay.
+
+`/seller/login` and `/seller/register` redirect signed-in sellers to the dashboard on the server. `/checkout` and `/orders` redirect to `/` without a customer session. Pages that read a session render on request, and the others prerender as static HTML. Customer login and sign-up are modals, not routes.
+
+## Conventions
+
+- **Server and client:** pages stay server components. Anything with state, effects or event handlers goes in a `'use client'` component.
+- **Hydration:** never read `localStorage`, `window` or the current time during a render that also runs on the server. Use `useStored` for stored values. It returns the fallback for the server and first client render, then updates. A guard that acts on a stored value must also check `useHydrated()`.
+- **Storage:** always go through `Store` or `useStored`, never call `localStorage` directly. Keys are prefixed `onetap.`. `useStored` updates all components and other tabs. The one exception is the theme bootstrap script in `app/layout.js`, which runs first.
+- **Writes during render:** `Store.set` notifies subscribers, so only call it from events and effects. This is why `Chat.guestId()` runs in an effect.
+- **Forms:** define fields as schema sections in `lib/schemas.js`, render with `<Sections>`, and wrap them in `<Form onSubmit>`. Throw `FieldError` to flag a field. Customer and seller registration share `ACCOUNT_SECTION`, `PERSONAL_SECTION` and `addressSection`. Only sellers get `STORE_SECTION`. The product form is the exception: it is one controlled object, because its fields are dynamic.
+- **Auth:** sellers and customers share `lib/server/auth.js`. Each has its own httpOnly session cookie, which is the only proof of who someone is. API routes call `sellerFrom(request)` or `customerFrom(request)`, and server components call `currentAccount(role)`. The local `session.seller` and `session.customer` values are display copies, so never use them to decide access. Passwords are scrypt hashes, and only the SHA-256 of a session token is stored.
+- **Orders:** add an action to `SELLER_ACTIONS` or `CUSTOMER_ACTIONS` in `lib/server/orders.js` with a guard on the order's state, then a matching client call. The browser never decides whether an action is allowed. Orders keep a copy of each item's name, price and image, so later product edits don't change them. Checkout takes prices and stock from the database, and reserves stock in the same transaction. Set `restock` on actions that give stock back.
+- **Chat:** conversations with real shops are on the server and need a customer login, so guests can only try the sample shops. Pages poll every few seconds, because there is no WebSocket connection. Messages have no rate limit or spam check yet, and buyers can only send text. Sample shops stay in the browser and reply automatically. Chat Education articles are placeholder wording in `CHAT_EDUCATION`.
+- **Admin routes:** wrap every handler in `adminRoute(permission, handler)`, guard pages with `pageAdmin(permission)`, and call `audit` for anything sensitive. Permissions live in `lib/adminRoles.js`.
+- **Order flow:** checkout, seller approves (`approve`, which sets `approvedAt`), seller sets a schedule (`requestPickup`), payment if prepaid (pickup status `awaiting_payment`), courier booking, courier approves or rejects, collection, delivery. `sellerGroup` in `lib/orders.js` gives the seller's My Orders tabs, and `orderGroup` the buyer's. `placeOrders` takes a `checkoutKey`, recorded in `checkouts`, so a repeat returns the first result. `after` on an order action runs inside its transaction, for notices and pickup changes.
+- **Pickups:** `submitPickupRequest` calls no courier. `releasePickup` then assigns one automatically, unless `pickupReviewRequired()` is on or no courier can take the parcel, when the request waits as `pending` in Pickup Approval. `approvePickup` claims the request, then `dispatchPickup` books the shipment and the pickup outside any transaction. A failed booking leaves the request Approved and keeps its idempotency keys, so a retry can't book twice, and the timer retries temporary failures up to 5 times with growing delays. To change courier, `returnToReview` cancels the old booking at the courier first. The `pickups_one_open` and `shipments_live` unique indexes are the last guard against duplicates. A courier that rejects a pickup goes through `declinePickup`, which voids its booking, adds it to `rejected_by` so it can't be offered the job again, and sets `auto_assign` for the retry timer. Never book a prepaid order before it's paid, and never add `picked_up` back to `booking_confirmed` in `NEXT`.
+- **Logistics Partner Panel:** use `courierRoute` for its APIs and `pageCourier` for its pages, and take the partner only from the session's `partnerId`, never from the request. Scope every query by it. Couriers see pickups only once booked (`scheduled` onwards), which they see as Pending until they accept it, then Scheduled (`COURIER_PICKUP_STATUS`). `courierReport` works only in Sandbox, where it signs the update and sends it through `handleWebhook`. It refuses live partners, whose picked up and delivered statuses must come from their API.
+- **Riders:** a partner registers its own riders in Rider Management, and `riders.js` takes the partner from the session only. Add Rider creates the Rider Panel account in the same step, so the form takes a username, password and confirmation. Duplicates are refused by username and mobile number (both across all partners), license file hash, and full name within a partner. Usernames are stored in lower case. Driver's licenses live in `data/documents/riders` and only go through `licenseResponse`, to the rider's own partner. Riders sign in through the `rider` role in `auth.js` with `username`, and the mobile number is in `phone`. Riders from before usernames kept their number as their username. Passwords are scrypt hashes, and the partner can reset one but never see it. An inactive rider is disabled in `profile`, and deactivating them, resetting their password or changing their username ends their sessions. The Rider Panel closes with its partner's panel (`panelAccess`).
+- **Rider tasks:** `rider_assignments` holds every pickup and delivery task. A rider can hold several open orders, and the `shipment_one_rider` unique index allows one rider per open pickup or delivery. Every active rider is offered, with their open order count. When a pickup task completes on collection, `riderTasksFollow` gives the same rider an accepted delivery task, so they carry it on. A partner who assigns someone else reassigns it. Assigning a pickup rider to a new pickup also approves it. A rider accepts or declines, then reports through `reportStatus` in `courierPanel.js`, the same signed Sandbox path as the panel, limited to `RIDER_EVENTS`. `setShipment` calls `riderTasksFollow`, so a task closes however the parcel moves, and moving or cancelling a pickup takes its task back. Orders never store riders: `orderRiders` reads them, and buyers only see the delivery rider. Rider status (Available to Inactive) is worked out from the furthest-along open task (`TASK_RANK`), not stored. The Rider Panel shows each open order as its own card with its own buttons, so every action touches one order. My Tasks sorts a rider's orders into For Pickup, In Transit, Out for Delivery and Completed with `taskBoard`, from each shipment's current status on every read. In Transit also lists parcels the rider collected while they are still moving, with their movements and sorting status from `movement`, and Completed needs a delivery report with proof.
+- **Shipment statuses:** after collection a parcel can go through `at_sorting_facility`, `sorting_completed`, `departed_sorting_facility` and `arrived_delivery_hub`, which need the facility's name as their location. A collected parcel stays `picked_up` until someone marks it `in_transit` (Mark In Transit in the Rider Panel). A Sandbox parcel can only become `ready_for_delivery` or `out_for_delivery` once its history has `in_transit`, `at_sorting_facility` and `arrived_delivery_hub` (`DISPATCH_STEPS`, `dispatchReady`): `applyStatus` ignores an earlier one. When the last of the three is applied it sets `ready_for_delivery` itself in the same transaction, audited as `system`, without notifying anyone (`QUIET`). The rider then clicks Out for Delivery, which sets `out_for_delivery` and tells the buyer. Riders do the three in order, each once, from a checklist on the card. After a failed delivery the parcel can go out again without repeating them. A live courier's own report is always applied. Ready for Delivery and Out for Delivery both sit in the rider's Out for Delivery tab, and Order Delivered appears only once it is `out_for_delivery`. Its time is kept in `out_for_delivery_at`. A delivery's proof keeps up to three `photos` (each with its upload time), `receivedBy` (one of the partner's active riders, chosen from `riderChoices`, required from the Rider Panel), an optional recipient name in `receiver`, and `deliveredBy`, who confirmed it, set by the server, never the form. Partner staff without a rider must give the recipient name instead. Every rider update needs a location, which the Rider Panel fills in where it can.
+- **Tracking history:** `trackingFor` builds the eleven milestones from the order, pickup, pickup rider and shipment events each time an order is read, and `withRiders` adds it as `trackingHistory`. Never call it `tracking`: that is the tracking number. Buyers get times and locations, and sellers also get notes and the rider's name.
+- **Proof photos:** delivery photos from the panel and the Rider Panel go to `data/documents/proofs` through `saveProofPhoto`, and are served only by `proofResponse` at `/api/proofs/<id>`. The delivery ties the photo to its shipment, so it can't be reused. A rider must send a photo they uploaded themselves. Older photos in the public uploads folder still show.
+- **Financial collections:** `recordCollection` runs inside the delivery's transaction and writes one `collection_records` row per order (the order ID is the key). It fixes the product total, rider fee (the buyer's shipping fee), admin fee (the commission rate at that moment, times the product total) and seller proceeds, so a later rate change never rewrites history. Only the admin fee is Onetap's. The collection status is worked out when read: prepaid against the order's payment record (`paidAt`, `paidAmount`, `paymentReference`, set by `pay`), COD along `cod_records` and rider remittances. Delivered orders from before this are recorded the first time the list is read, at that day's rate. The commission starts at 0% and is set under Financial Collections.
+- **Rider cash:** when a rider's delivery task completes, `riderTasksFollow` puts their ID on the order's `cod_records` row, so the cash is theirs to hand over. A rider remittance (`rider_remittances`) always covers everything they hold, and `rider_one_remittance` allows one waiting at a time. The partner confirms the amount received, with a note for any shortage, or rejects it, which clears `rider_remittance_id` so the cash is back on the rider. A rider with cash held or waiting can't be deactivated. This is separate from Onetap's COD remittance from the courier in `cod.js`, which doesn't wait for it. Days are counted in Philippine time.
+- **Activation:** `activatePartner` in `lib/server/logistics.js` is the only way a partner goes live. It refuses a partner with no delivery options, locations or active login, runs the connection test itself and stays inactive if that fails, then returns a report read back from the same queries the panels use. There is no separate test step for administrators, and no sync job: panels read the database.
+- **Partner status:** `logistics_partners` is the only source, and every panel reads it from there. Never use the `LOGISTICS_PARTNERS` seed for anything but first-run setup. Only active partners are offered to sellers and customers, and `dispatchPickup` refuses to book an inactive one. Deactivating never deletes records. `panelAccess` is checked on every courier request: the panel stays open while the partner is active or has open parcels, then closes. Open pages catch up within 15 seconds, and as soon as they are looked at again, with `useRefresh`. Seller My Orders (`useOrders`) and the buyer's orders (`usePurchases`) refresh the same way. There is no WebSocket connection: this polling is how panels stay in step.
+- **Courier logins:** `addPartner` saves a partner and its first login in one transaction, so a failure leaves neither. Signing in needs both an active account and an open panel (`panelAccess`), so a new partner can't sign in until it is activated. Passwords reach the server with a `confirmPassword` it also checks, and are only ever stored as scrypt hashes. Changing a username, resetting a password or deactivating an account ends its sessions. Courier logins don't need an email: `courierUsers.js` stores a hidden placeholder because the column is required.
+- **Notifications:** `notifySeller`, `notifyCustomer`, `notifyCourier` and `notifyRider` in `lib/server/notifications.js`. Call them inside the transaction that makes the change. Every new rider task, including the delivery a rider carries on from collection, passes `taskNotice` from `riderTasks.js` as `details` (order, customer, pickup location, assignment time). Buyers' phone and address only go in delivery notices. Riders mark notices read one at a time or all at once.
+- **Rider Panel header:** the bell and Task History are dropdowns in `RiderShell`, one open at a time (`useHeaderPanel`). Task History reads `/api/rider/history` (`riderHistory`) only while open. My Tasks no longer lists history. Order `events` are shown to buyers, so keep administrators' rejection reasons out of them. They go on `order.pickup`, which only the seller's screens show.
+- **Audit:** `audit` also records sellers, couriers and the system. Pass `{ username, adminRole }`, with `adminRole` set to `seller`, `courier:<partner>`, `rider:<partner>`, `courier_api` or `system`.
+- **Seller approval:** `sellerFrom(request)` refuses anyone who isn't approved, so use it on every seller API. Only the application pages and notifications use `applicantFrom`. New sellers always start Pending, and `seller_applications` is the only source of their status. Sellers from before this feature were marked approved once, when the table was created. Suspended sellers' products leave the store and can't be bought.
+- **Seller documents:** IDs and permits live in `data/documents`, not the public uploads folder. Never serve them through `/api/uploads`: they only go through `documentResponse`, to the applicant or an administrator with the `sellers` permission.
+- **Couriers:** every courier call goes through `callCourier`. Never mark an order booked, picked up or delivered without the courier saying so: bookings wait for a confirmed response, and movement only comes through `processCourierEvent`, from a verified webhook or `track`. Never return credentials from an API or log them. The browser only sees which fields are set.
+- **Products:** put rules in `lib/products.js`, so the form and the API can't disagree. Never query the database from a component, and scope every seller query by seller.
+- **Product descriptions:** they are stored as blocks of text runs, never HTML. Keep it that way, and show them with `<RichText>`.
+- **Modals:** use `Modal.open({ title, content, variant })` (a single native `<dialog>`). It handles focus and Escape.
+- **Toasts:** call `toast(message, type)`. It works from plain functions.
+- **State set from elsewhere:** use `createState` from `lib/ui.js` when one host component renders the state but other code sets it.
+- **User content:** render it as JSX text, which React escapes. Never use `dangerouslySetInnerHTML` for it. The theme script is the only use, and it is a constant.
+- **Colours:** use tokens from `:root`. Add a token to both `:root` and `[data-theme="dark"]`. Text and controls must meet WCAG AA (4.5:1) in both themes, including on hero gradients. Use `--link`, not `--primary`, for coloured text.
+- **Icons:** add a `<symbol id="i-name">` to `public/icons.svg`, then render `<Icon name="name" />`.
+- **Copy:** the brand is Onetap. The reference design's "Largo" name must not reappear.
+
+## Mocked parts
+
+Accounts, sessions, products, orders and shop chats are on the server. Everything else persists in the visitor's browser only, including the cart.
+
+- **Payments:** no payment provider is connected. OnetapPay and card orders start Unpaid, and a Pay button marks them paid without taking money. It records a payment with a `SIM-PAY-` reference for reconciliation, so a real provider must replace the `pay` action before launch. Never collect card numbers here: use a provider's hosted checkout. Refunds are status changes only. COD remittances are entered by hand from a courier's statement. Unpaid orders hold stock until cancelled, because nothing expires them.
+- **Seller dashboard settings:** campaign choices and the commission rate are saved per seller in the browser, so they don't follow a seller to another device.
+- **Before going live:** serve the site over HTTPS, because the session cookie is only marked `Secure` on HTTPS requests. The proxy must pass `X-Forwarded-Proto` and set `X-Forwarded-For` itself, because login rate limits use that address and a client could otherwise change it.
+- **Product listings:** publishing puts a product on sale straight away, with no approval step. `reviewProduct` only flags restricted terms for administrators. An administrator can suspend a live listing, and a seller can edit a suspended product but can't put it back on sale.
+- **Product AI Optimiser:** rule-based checks in `qualityReport`. No AI model is connected.
+- **Uploads:** files sit on the server's disk. Removing an image from a product doesn't delete the file, so unused uploads build up.
+- **Password reset:** shows a confirmation but sends no email, for sellers and customers alike. A seller who forgets their password can't get back in until a mail service is connected.
+- **Chat:** `Threads` shares conversations between tabs of one browser. Connecting different devices needs a realtime backend. Sample shops and the sample buyer reply automatically.
+- **Support live chat:** a bot that matches FAQ text. Tickets are saved locally.
+- **Order tracking:** the Help Centre form looks up the signed-in customer's own orders.
+- **Vouchers and sample products:** vouchers set a flag and don't reduce the price at checkout. `PRODUCTS` are demo items with emoji in place of photos. They can go in the cart, but they can't be bought.
+- **Seller dashboard:** today's stats are zero because there are no real sales behind them. The to-do counts come from the seller's orders. Chat Management opens the seller inbox and Shop Information shows the shop's details. Joining a campaign and setting the commission rate save per seller in the browser. Other sidebar entries outside Order and Product show an "isn't available yet" notice.
+- **Seller orders:** the My Orders tabs come from `orderGroup` in `lib/orders.js`. Each order sits in one tab, and open returns, refunds, cancellations and failed deliveries go under Return / Refunds / Cancel. That page keeps closed requests too, so one order can show under its Return / Refund, Cancellation and Failed Delivery tabs.
+- **Couriers:** J&T Express, Ninja Van and LBC Express run on the built-in Sandbox, so no parcel moves and tracking numbers start with `SBX-`. Production credentials can be stored, but `unavailableAdapter` refuses every call until a real adapter is written for that courier from its API documentation, in `adapterFor`. The webhook format is Onetap's own (`x-onetap-signature`, HMAC-SHA256 of `timestamp.body`), so each real courier also needs its own parsing and signature check. In Sandbox, an administrator sends courier updates from the shipment details, and a partner's staff send them from the Logistics Partner Panel. Those panel updates are Sandbox tooling, not courier confirmation, so a live partner can't use them. Sandbox waybills are labelled as samples: a real adapter must return the courier's own waybill.
+- **Service area:** `SHIPPING_ZONES` in `lib/data.js` is the only list of areas, currently Tuguegarao alone. Partner forms, rates, checkout, pickup requests and product estimates all read it, so never hardcode an area. `moveToServiceArea` in `db.js` moved saved partners and products to it. Orders keep the area they were placed with, and `servedArea` in `lib/server/pickups.js` lets older ones still be booked. `SERVICE_AREA` sets where orders can be delivered: `placeOrders` refuses any address that fails `serviceAddressErrors`. The city, province and zip are typed by the buyer and aren't verified against a map. This covers buyers' delivery addresses only, not sellers.
+- **Courier selection:** the rate is the seller's stated weight on the partner's rate card, not a live quote. Pickup coverage uses the area the seller picks on the request, because seller addresses aren't mapped to shipping areas.
+- **Proof of delivery:** one to three photos (Capture Photo uses the device camera through the browser's file input), the rider in Received By, and an optional recipient name. Photos are required from riders and optional for partner staff. Photos are private files. Maps are links to a Google Maps search for the typed address, because addresses aren't geocoded.
+- **Delivery notifications:** these are in-app only. No email or SMS is connected, so riders only hear about tasks in the Rider Panel. Its header bell checks every 5 seconds, shows a toast for anything new and reloads My Tasks. Pages still check every 15 seconds.
+- **Riders:** Rider updates are Sandbox tooling like the panel's, so a live partner's riders can accept and decline but their statuses must come from the courier's API. Mobile numbers are checked for format only, with no SMS verification, and the license is stored, not checked against LTO records.
+- **Translation:** Filipino covers the header only, and not the seller dashboard.
+
+## Replace before launch
+
+All in `lib/data.js` unless noted:
+
+- `CONFIG.appLinks`: placeholder store URLs. Download App generates a QR code from the selected store's URL, so test each one by scanning.
+- The store logos in `public/icons.svg` are simplified. Swap in the official badge artwork.
+- `CONFIG.social`: currently the platform home pages.
+- `CONFIG.supportEmail` and `CONFIG.supportHours`.
+- `RETURN_POLICY` and `FAQS`: placeholder wording that needs legal and business review.
+- `LOGISTICS_PARTNERS`: first-run seed for placeholder rates, which buyers pay at checkout. After that, rates live in the database and are edited in the Admin Console. `STANDARD_PRODUCTS`: sample templates.
+- `BEST_PRICE`, `AFFILIATE`, `SELLER_ANNOUNCEMENTS` and `SELLER_CAMPAIGNS`: sample figures, notices and dates on the seller dashboard.
+- The "Excellent" rating in `ShopPerformance` and the ad banner in `Announcements` (`components/SellerDashboard.js`) are fixed sample content.
+- Promotional claims in `app/page.js` and `components/Storefront.js` (cashback, 2x refund, free shipping).

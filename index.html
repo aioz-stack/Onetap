@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Onetap | Mall &amp; Marketplace</title>
+  <meta name="description" content="Onetap is a mall and marketplace for daily deals, authentic brands and free shipping nationwide.">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <script>
+    // Runs before first paint so a saved dark theme never flashes light.
+    (function () {
+      var saved = null;
+      try { saved = JSON.parse(localStorage.getItem('onetap.theme')); } catch (e) {}
+      var prefersDark = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = saved || (prefersDark ? 'dark' : 'light');
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path fill="currentColor" d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
+      <symbol id="i-help" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></g></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></g></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></g></symbol>
+      <symbol id="i-cart" viewBox="0 0 24 24"><path fill="currentColor" d="M1 2.5h3.2c.5 0 .9.3 1 .8L5.8 6H22c.7 0 1.1.6 1 1.2l-2 8c-.1.5-.5.8-1 .8H8.2l.4 2H20v2H7.8c-.5 0-.9-.3-1-.8L3.4 4.5H1z"/><circle fill="currentColor" cx="9" cy="22" r="1.7"/><circle fill="currentColor" cx="18" cy="22" r="1.7"/></symbol>
+      <symbol id="i-star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l3 6.3 6.9.9-5 4.8 1.2 6.9L12 16.6 5.9 20l1.2-6.9-5-4.8 6.9-.9z"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l8 3v6.5c0 5-3.4 8.9-8 10.5-4.6-1.6-8-5.5-8-10.5V5z"/><path fill="rgba(0,0,0,.18)" d="M12 2v20c-4.6-1.6-8-5.5-8-10.5V5z"/></symbol>
+      <symbol id="i-facebook" viewBox="0 0 24 24"><path fill="currentColor" d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07c0 6.03 4.39 11.03 10.13 11.93v-8.44H7.08v-3.49h3.05V9.41c0-3.03 1.79-4.7 4.53-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.26h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"/></symbol>
+      <symbol id="i-instagram" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.4"/></g><circle fill="currentColor" cx="17.6" cy="6.4" r="1.4"/></symbol>
+      <symbol id="i-tiktok" viewBox="0 0 16 16"><path fill="currentColor" d="M9 0h1.98c.144.715.54 1.617 1.235 2.512C12.895 3.389 13.797 4 15 4v2c-1.753 0-3.07-.814-4-1.829V11a5 5 0 1 1-5-5v2a3 3 0 1 0 3 3z"/></symbol>
+      <symbol id="i-apple" viewBox="0 0 16 16"><path fill="currentColor" d="M11.182.008C11.148-.03 9.923.023 8.857 1.18c-1.066 1.156-.902 2.482-.878 2.516s1.52.087 2.475-1.258.762-2.391.728-2.43m3.314 11.733c-.048-.096-2.325-1.234-2.113-3.422s1.675-2.789 1.698-2.854-.597-.79-1.254-1.157a3.7 3.7 0 0 0-1.563-.434c-.108-.003-.483-.095-1.254.116-.508.139-1.653.589-1.968.607-.316.018-1.256-.522-2.267-.665-.647-.1-1.333.105-1.824.302-.49.197-1.422.757-2.074 2.24-.652 1.482-.311 3.83-.067 4.56s.625 1.924 1.273 2.796c.576.984 1.34 1.667 1.659 1.899s1.219.386 1.843.067c.502-.308 1.408-.485 1.766-.472.357.013 1.061.154 1.782.539.571.197 1.111.115 1.652-.105.541-.221 1.324-1.059 2.238-2.758q.52-1.185.473-1.282"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M5 3.3c0-.9 1-1.5 1.8-1l14 8c.8.5.8 1.6 0 2.1l-14 8.4c-.8.5-1.8-.1-1.8-1z"/></symbol>
+      <symbol id="i-google-play" viewBox="0 0 24 24"><path fill="#00a0ff" d="M3.6 2.4c-.3.3-.4.6-.4 1v17.200c0 .4.1.7.4 1L13.200 12z"/><path fill="#ffce00" d="M16.400 15.200 13.200 12l3.200-3.200 3.900 2.200c1 .6 1 1.400 0 2z"/><path fill="#ff3a44" d="M16.400 15.200 13.200 12l-9.600 9.600c.4.4 1 .5 1.700.1z"/><path fill="#00c853" d="M16.400 8.800 5.300 2.500c-.7-.4-1.300-.3-1.700.1L13.200 12z"/></symbol>
+      <symbol id="i-appgallery" viewBox="0 0 24 24"><rect width="24" height="24" rx="5.500" fill="#e5202e"/><path fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" d="M7.500 8v1.500a4.500 4.500 0 0 0 9 0V8"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M3 6h18M3 12h18M3 18h18"/></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path fill="currentColor" d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path fill="currentColor" d="M2.5 21.500l19-9.500-19-9.500v7.400l13 2.100-13 2.100z"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><path d="M1.500 12S5.500 5 12 5s10.500 7 10.500 7-4 7-10.500 7S1.500 12 1.500 12z"/><circle cx="12" cy="12" r="3"/></g></symbol>
+      <symbol id="i-store" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 9l1.500-5h15L21 9M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M5 12v8h14v-8M10 20v-5h4v5"/></symbol>
+      <symbol id="i-truck" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M1.500 5h13v12h-13zM14.500 9h4.500l3.500 4v4h-8z"/><circle cx="6" cy="18.500" r="2"/><circle cx="18" cy="18.500" r="2"/></g></symbol>
+      <symbol id="i-refund" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 12a9 9 0 1 0 3-6.700L3 8M3 3v5h5"/></symbol>
+      <symbol id="i-mail" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 7 10-7"/></g></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15"/></symbol>
+      <symbol id="i-arrow-left" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+    </defs>
+  </svg>
+
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="topbar" id="topbar">
+      <div class="container topbar__row">
+        <nav class="topnav" aria-label="Merchants and app">
+          <a class="topnav__item" href="#/seller/login" data-i18n="sellerCentre">Seller Centre</a>
+          <a class="topnav__item" href="#/seller/register" data-i18n="startSelling">Start Selling</a>
+          <div class="topnav__item topnav__slot popover-wrap">
+            <button class="topnav__trigger" type="button" data-popover-toggle="download-panel" aria-expanded="false" aria-controls="download-panel" data-i18n="downloadApp">Download App</button>
+            <div class="popover popover--download" id="download-panel" hidden></div>
+          </div>
+          <span class="topnav__item topnav__follow">
+            <span data-i18n="followUs">Follow us on</span>
+            <a id="social-facebook" aria-label="Onetap on Facebook" target="_blank" rel="noopener"><svg class="icon" aria-hidden="true"><use href="#i-facebook"/></svg></a>
+            <a id="social-instagram" aria-label="Onetap on Instagram" target="_blank" rel="noopener"><svg class="icon" aria-hidden="true"><use href="#i-instagram"/></svg></a>
+            <a id="social-tiktok" aria-label="Onetap on TikTok" target="_blank" rel="noopener"><svg class="icon" aria-hidden="true"><use href="#i-tiktok"/></svg></a>
+          </span>
+        </nav>
+
+        <div class="topnav topnav--right">
+          <button class="theme-toggle" id="theme-toggle" type="button">
+            <svg class="icon" aria-hidden="true"><use id="theme-icon" href="#i-moon"/></svg>
+            <span id="theme-label">Dark</span>
+          </button>
+
+          <div class="popover-wrap">
+            <button class="topnav__item" type="button" data-popover-toggle="notif-panel" aria-expanded="false" aria-controls="notif-panel">
+              <svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>
+              <span data-i18n="notifications">Notifications</span>
+              <span class="count" id="notif-count" aria-label="unread"></span>
+            </button>
+            <div class="popover popover--wide" id="notif-panel" hidden></div>
+          </div>
+
+          <a class="topnav__item" href="#/help">
+            <svg class="icon" aria-hidden="true"><use href="#i-help"/></svg>
+            <span data-i18n="help">Help</span>
+          </a>
+
+          <div class="popover-wrap">
+            <button class="topnav__item" type="button" data-popover-toggle="lang-panel" aria-expanded="false" aria-controls="lang-panel">
+              <svg class="icon" aria-hidden="true"><use href="#i-globe"/></svg>
+              <span id="lang-label">English</span>
+              <svg class="icon icon--sm" aria-hidden="true"><use href="#i-chevron"/></svg>
+            </button>
+            <div class="popover" id="lang-panel" hidden>
+              <button class="popover__option" type="button" data-lang="en">English</button>
+              <button class="popover__option" type="button" data-lang="fil">Filipino</button>
+            </div>
+          </div>
+
+          <div class="topnav__auth" id="auth-slot"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container header-main">
+      <a class="brand" href="#/" aria-label="Onetap home">
+        <img class="brand__mark" src="assets/logo.svg" alt="" width="56" height="56">
+        <span class="brand__text">
+          <span class="brand__name">Onetap</span>
+          <span class="brand__tagline">Mall &amp; Marketplace</span>
+        </span>
+      </a>
+
+      <div class="search-block">
+        <form class="search" id="search-form" role="search">
+          <label class="sr-only" for="search-input">Search Onetap</label>
+          <input id="search-input" type="search" autocomplete="off" data-i18n-placeholder="searchPlaceholder"
+                 placeholder="Sign up &amp; get ₱150 OFF your first order | Search deals, brands &amp; items">
+          <button type="submit" class="search__btn">
+            <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+            <span data-i18n="search">Search</span>
+          </button>
+        </form>
+        <div class="hot-deals" id="hot-deals">
+          <span class="hot-deals__label" data-i18n="hotDeals">Hot Deals:</span>
+        </div>
+      </div>
+
+      <button class="cart-btn" type="button" data-action="cart" aria-label="Open cart">
+        <svg class="icon" aria-hidden="true"><use href="#i-cart"/></svg>
+        <span class="cart-btn__count" id="cart-count">0</span>
+      </button>
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="topbar">
+        <svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main">
+    <div id="view-home" class="view">
+      <section class="container hero-grid" aria-label="Promotions">
+        <div class="carousel" id="carousel" aria-roledescription="carousel" aria-label="Featured offers">
+          <article class="slide slide--vip">
+            <span class="pill"><svg class="icon" aria-hidden="true"><use href="#i-star"/></svg> Onetap VIP Member Club</span>
+            <h1 class="slide__title">Unlock Exclusive<br>Savings &amp; Free Shipping!</h1>
+            <p class="slide__text">Get up to 20% OFF vouchers daily + ₱0 minimum spend delivery nationwide.</p>
+            <div class="slide__actions">
+              <button class="btn btn--white" type="button" data-action="claim">Claim Vouchers Now</button>
+              <span class="slide__note">Limited Daily Slots</span>
+            </div>
+          </article>
+          <article class="slide slide--flash" hidden>
+            <span class="pill"><svg class="icon" aria-hidden="true"><use href="#i-star"/></svg> Payday Flash Sale</span>
+            <h2 class="slide__title">Big Brands,<br>Bigger Payday Deals</h2>
+            <p class="slide__text">Fresh markdowns on gadgets, fashion and home essentials every day.</p>
+            <div class="slide__actions">
+              <button class="btn btn--white" type="button" data-action="scroll-deals">Shop Today's Deals</button>
+              <span class="slide__note">While Stocks Last</span>
+            </div>
+          </article>
+          <article class="slide slide--seller" hidden>
+            <span class="pill"><svg class="icon" aria-hidden="true"><use href="#i-star"/></svg> Onetap Sellers</span>
+            <h2 class="slide__title">Open Your Shop<br>in One Tap</h2>
+            <p class="slide__text">Register your store and start reaching shoppers nationwide.</p>
+            <div class="slide__actions">
+              <a class="btn btn--white" href="#/seller/register">Start Selling</a>
+              <span class="slide__note">Free to Join</span>
+            </div>
+          </article>
+          <div class="carousel__dots" id="carousel-dots" role="group" aria-label="Choose slide"></div>
+        </div>
+
+        <div class="promo-stack">
+          <a class="promo promo--pay" href="#products" data-action="scroll-deals">
+            <span class="promo__tag">Fast Pay</span>
+            <h2 class="promo__title">Pay with OnetapPay &amp; Apple Pay</h2>
+            <p class="promo__text">Instant checkout, 0 transaction fees &amp; 5% cashback.</p>
+            <span class="promo__foot">
+              <strong class="promo__highlight">₱0 Min. Spend</strong>
+              <span class="apple-pay"><svg class="icon" aria-hidden="true"><use href="#i-apple"/></svg>Pay</span>
+            </span>
+          </a>
+          <a class="promo promo--mall" href="#products" data-action="scroll-deals">
+            <span class="promo__tag">Onetap Mall</span>
+            <h2 class="promo__title">100% Authentic Brands</h2>
+            <p class="promo__text">7-Day Free Returns | Guaranteed Genuine or 2x Refund.</p>
+            <span class="promo__foot">
+              <strong class="promo__badge">Up to 60% OFF</strong>
+              <svg class="icon promo__shield" aria-hidden="true"><use href="#i-shield"/></svg>
+            </span>
+          </a>
+        </div>
+      </section>
+
+      <section class="container deals" id="products" aria-labelledby="deals-title">
+        <div class="deals__head">
+          <h2 id="deals-title">Today's Deals</h2>
+          <div class="chips" id="category-chips" role="group" aria-label="Filter by category"></div>
+        </div>
+        <p class="deals__status" id="deals-status" role="status"></p>
+        <div class="product-grid" id="product-grid"></div>
+      </section>
+    </div>
+
+    <div id="view-seller" class="view" hidden></div>
+    <div id="view-help" class="view" hidden></div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container site-footer__row">
+      <span>© 2026 Onetap. All rights reserved.</span>
+      <nav aria-label="Footer">
+        <a href="#/help">Help Centre</a>
+        <a href="#/seller/register">Sell on Onetap</a>
+        <button type="button" data-action="policy">Return &amp; Refund Policy</button>
+      </nav>
+    </div>
+  </footer>
+
+  <aside class="chat" id="chat" aria-label="Customer and seller chat">
+    <section class="chat__panel" id="chat-panel" hidden></section>
+    <button class="chat__launcher" id="chat-launcher" type="button" aria-expanded="false" aria-controls="chat-panel">
+      <svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>
+      <span>Chat</span>
+      <span class="count" id="chat-unread" hidden></span>
+    </button>
+  </aside>
+
+  <dialog class="modal" id="modal" aria-labelledby="modal-title">
+    <div class="modal__head">
+      <h2 id="modal-title"></h2>
+      <button class="icon-btn" type="button" id="modal-close" aria-label="Close">
+        <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+      </button>
+    </div>
+    <div class="modal__body" id="modal-body"></div>
+  </dialog>
+
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+  <!-- Classic scripts, in dependency order, so index.html also works from file:// -->
+  <script src="vendor/qrcode.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/forms.js"></script>
+  <script src="js/auth-views.js"></script>
+  <script src="js/support.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

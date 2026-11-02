@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "onetap",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["serve.js", "5173"],
+      "port": 5173
+    },
+    {
+      "name": "onetap-next",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "nextjs", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}
