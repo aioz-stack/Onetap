@@ -26,10 +26,10 @@ const VIEWS = [
 ];
 
 const TEXT = {
-  overview: 'Your earnings, balance and payouts, from your delivered orders.',
+  overview: 'Your net income, released weekly every Tuesday at 8:00 AM.',
   statement: 'A statement of your income for any range of dates.',
   details: 'Every delivered order and what you earned from it.',
-  payouts: 'Withdraw your available balance and follow your payouts.',
+  payouts: 'Withdraw your released income and follow your payouts.',
 };
 
 // Philippine dates for the statement's default range and quick picks.
@@ -53,10 +53,24 @@ function Explainer() {
         <li><strong>Shipping fees</strong> go to the courier, so they never count as your income.</li>
         <li><strong>Net income</strong> = product revenue − platform fees − Onetap&apos;s commission − refunds − other deductions. Onetap charges no separate platform fee today, and the commission rate is fixed on each order when it&apos;s delivered.</li>
         <li>A refund takes back that order&apos;s product revenue and returns its commission.</li>
-        <li>Income becomes <strong>available</strong> once Onetap holds the money (a prepaid payment is on record, or the courier remitted the COD cash) and the buyer&apos;s 7-day return window has closed.</li>
-        <li>Your <strong>available balance</strong> is your available income minus every payout you requested that wasn&apos;t rejected or cancelled.</li>
+        <li>An order&apos;s income becomes <strong>eligible</strong> once Onetap holds the money (a prepaid payment is on record, or the courier remitted the COD cash) and the buyer&apos;s 7-day return window has closed with no return open.</li>
+        <li>Eligible income is paid weekly. Everything that becomes eligible from Monday 12:00 AM to Sunday 11:59 PM is <strong>Pending</strong>, and is <strong>Released</strong> the following Tuesday at 8:00 AM.</li>
+        <li><strong>Total Income</strong> = Released + Pending + income not yet eligible.</li>
+        <li>Your <strong>available balance</strong> is your released income minus every payout you requested that wasn&apos;t rejected or cancelled.</li>
       </ul>
     </details>
+  );
+}
+
+const when = (ms) => new Date(ms).toLocaleString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' });
+
+function IncomeCard({ id, label, value, icon, tone = '', children }) {
+  return (
+    <article className={`panel income-card${tone ? ` income-card--${tone}` : ''}`} aria-labelledby={`income-card-${id}`}>
+      <h2 id={`income-card-${id}`}><Icon name={icon} /> {label}</h2>
+      <p className="income-card__value">{peso(value)}</p>
+      <p className="income-card__note">{children}</p>
+    </article>
   );
 }
 
@@ -65,28 +79,34 @@ function Overview() {
   const [metric, setMetric] = useState('net');
   const [range, setRange] = useState(30);
   if (!data) return loading ? <div className="skeleton" role="status" aria-label="Loading your income" /> : <p className="form-error" role="alert">{error}</p>;
-  const { totals, balance } = data;
+  const { totals, balance, income } = data;
   const days = data.trend.slice(-range).map((d) => ({ day: d.date, value: d[metric] }));
+  const monthName = new Date().toLocaleDateString('en-PH', { month: 'long', year: 'numeric', timeZone: 'Asia/Manila' });
   return (
     <>
-      <section className="panel" aria-labelledby="income-earnings">
-        <div className="panel__head"><h2 id="income-earnings">Earnings</h2><span className="muted">{totals.orders} delivered {totals.orders === 1 ? 'order' : 'orders'}</span></div>
-        <StatCards items={[
-          { label: 'Total Earnings (net)', value: peso(totals.totalEarnings) },
-          { label: 'Total Sales Revenue (gross)', value: peso(totals.totalSales) },
-          { label: 'Today', value: peso(totals.today) },
-          { label: 'This Week', value: peso(totals.week) },
-          { label: 'This Month', value: peso(totals.month) },
-        ]} />
+      <section className="income-cards" aria-label="Income summary">
+        <IncomeCard id="pending" label="Pending Income" value={income.pending} icon="clock" tone="pending">
+          {income.releases.length ? income.releases.map((r) => <span className="income-card__line" key={r.at}>{peso(r.amount)} releases {when(r.at)}</span>) : <span className="income-card__line">Nothing pending. The next release is {when(income.cycle.nextRelease)}.</span>}
+          <span className="income-card__line">This cycle: {when(income.cycle.from)} to {when(income.cycle.to)}.</span>
+        </IncomeCard>
+        <IncomeCard id="released" label="Released Income" value={income.released} icon="check" tone="released">
+          Released every Tuesday at 8:00 AM. {peso(balance.available)} available to withdraw.
+        </IncomeCard>
+        <IncomeCard id="month" label="This Month" value={income.month} icon="chart">
+          Net income from {monthName}&apos;s transactions.
+        </IncomeCard>
+        <IncomeCard id="total" label="Total Income" value={income.total} icon="wallet">
+          From {totals.orders} completed {totals.orders === 1 ? 'order' : 'orders'}. {income.notYetEligible > 0 && <>{peso(income.notYetEligible)} isn&apos;t eligible yet.</>}
+        </IncomeCard>
       </section>
       <div className="income-pair">
         <section className="panel" aria-labelledby="income-balance">
           <div className="panel__head"><h2 id="income-balance">Balance</h2><Link className="link" href="/seller/income/payouts">Withdraw</Link></div>
           <StatCards items={[
-            { label: 'Available Balance', value: peso(balance.available) },
+            { label: 'Available to Withdraw', value: peso(balance.available) },
+            { label: 'Total Withdrawn', value: peso(balance.withdrawn) },
             { label: 'Awaiting Settlement', value: peso(balance.pendingSettlement) },
             { label: 'In Return Window', value: peso(balance.onHold) },
-            { label: 'Total Withdrawn', value: peso(balance.withdrawn) },
           ]} />
         </section>
         <section className="panel" aria-labelledby="income-payouts">
@@ -237,7 +257,7 @@ function RecordDetail({ orderId }) {
   ];
   const timeline = [
     ['Order placed', r.orderDate], ['Delivered, income recorded', r.deliveredAt], ['Money settled with Onetap', r.settledAt], ['Return window closed', r.windowEnds <= Date.now() ? r.windowEnds : null],
-    ['Refunded to the buyer', r.refundedAt], ['Available to withdraw', r.availableAt],
+    ['Eligible for release', r.eligibleAt], ['Refunded to the buyer', r.refundedAt], [r.releasedAt ? 'Released' : 'Scheduled release', r.releasedAt || r.releaseAt],
   ].filter(([, at]) => at);
   return (
     <div className="assistant-form">
@@ -422,11 +442,11 @@ function Payouts() {
           Withdraw
         </button>
         <p className="muted">
-          {open ? 'You have a payout in progress. You can request another once it is done.' : balance.available < data.minPayout ? `You can withdraw once your available balance reaches ${peso(data.minPayout)}.` : 'Onetap processes payouts and tells you when the money is sent.'}
+          {open ? 'You have a payout in progress. You can request another once it is done.' : balance.available < data.minPayout ? `You can withdraw once your released income reaches ${peso(data.minPayout)}. ${peso(balance.pendingRelease)} is pending release on ${when(data.income.cycle.nextRelease)}.` : 'Withdraw your released income. Onetap processes payouts and tells you when the money is sent.'}
         </p>
         <StatCards items={[
-          { label: 'Awaiting Settlement', value: peso(balance.pendingSettlement) },
-          { label: 'In Return Window', value: peso(balance.onHold) },
+          { label: 'Pending Release', value: peso(balance.pendingRelease) },
+          { label: 'Not Yet Eligible', value: peso(balance.notYetEligible) },
           { label: 'Payouts in Progress', value: peso(balance.payouts.pending.amount + balance.payouts.processing.amount) },
           { label: 'Total Withdrawn', value: peso(balance.withdrawn) },
         ]} />

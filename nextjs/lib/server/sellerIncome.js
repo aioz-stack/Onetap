@@ -8,10 +8,13 @@
 // Shipping fees are paid by the buyer and passed to the courier, so they are in gross sales but
 // never in the seller's net. A refund reverses the commission on that order.
 //
-// An order's net income becomes available once Onetap holds the money (a prepaid payment is on
+// An order's net income becomes eligible once Onetap holds the money (a prepaid payment is on
 // record, or the courier remitted the COD cash) and the buyer's 7-day return window has closed
-// with no return open. Sellers withdraw available income through payouts, which an
-// administrator processes.
+// with no return open. Eligible income is paid in weekly cycles: everything that becomes
+// eligible from Monday 12:00 AM to Sunday 11:59 PM (Philippine time) is Pending Release, and is
+// Released the following Tuesday at 8:00 AM. Sellers withdraw released income through payouts,
+// which an administrator processes. Releases are worked out from the time on every read, so no
+// scheduled job runs.
 
 import { randomBytes, randomUUID } from 'node:crypto';
 import { audit } from './admin';
@@ -50,6 +53,22 @@ function periodKey(ms, period) {
   }
   return day;
 }
+// The Monday 12:00 AM that starts the Philippine week containing `ms`.
+function weekStartOf(ms) {
+  const day = new Date(`${phDate(ms)}T00:00:00Z`);
+  return startOfDay(ms) - ((day.getUTCDay() + 6) % 7) * DAY;
+}
+// Income that becomes eligible in a week is released the Tuesday after it, at 8:00 AM.
+const RELEASE_AFTER_WEEK = DAY + 8 * 60 * 60 * 1000;
+export const releaseTimeFor = (eligibleAt) => weekStartOf(eligibleAt) + 7 * DAY + RELEASE_AFTER_WEEK;
+// The release still to come for income that is pending now: this week's, unless last week's
+// has not been released yet (Monday, or Tuesday before 8:00 AM).
+function nextRelease(time) {
+  const lastWeeks = releaseTimeFor(weekStartOf(time) - DAY);
+  return time < lastWeeks ? lastWeeks : releaseTimeFor(time);
+}
+const when = (ms) => new Date(ms).toLocaleString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' });
+
 const parseDay = (value) => (/^\d{4}-\d{2}-\d{2}$/.test(value || '') ? Date.parse(`${value}T00:00:00+08:00`) : NaN);
 
 // Writes any missing ledger entries for a seller from their delivered and refunded orders. It runs
@@ -80,7 +99,8 @@ export function syncSellerIncome(seller) {
 const statusText = {
   pending: 'Awaiting settlement',
   on_hold: 'In return window',
-  available: 'Available',
+  pending_release: 'Pending release',
+  released: 'Released',
   refunded: 'Refunded',
 };
 
@@ -127,13 +147,22 @@ function orderRecords(seller) {
       status = 'on_hold';
       reason = `The buyer can ask for a return until ${new Date(windowEnds).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' })}.`;
     } else {
-      status = 'available';
-      reason = 'Ready to withdraw.';
+      const eligibleAt = Math.max(settledAt, windowEnds);
+      const releaseAt = releaseTimeFor(eligibleAt);
+      if (time < releaseAt) {
+        status = 'pending_release';
+        reason = `Eligible ${when(eligibleAt)}. Released with the week's income on ${when(releaseAt)}.`;
+      } else {
+        status = 'released';
+        reason = `Released ${when(releaseAt)}. You can withdraw it.`;
+      }
     }
     const items = order.items || [];
     const line = (key) => money(sale[key] + (refund?.[key] || 0));
     return {
-      orderId, orderDate: Date.parse(order.placedAt) || sale.at, deliveredAt, settledAt, availableAt: status === 'available' ? Math.max(settledAt, windowEnds) : null, windowEnds,
+      orderId, orderDate: Date.parse(order.placedAt) || sale.at, deliveredAt, settledAt, eligibleAt: settledAt && !refund && !returnOpen && time >= windowEnds ? Math.max(settledAt, windowEnds) : null, windowEnds,
+      releasedAt: status === 'released' ? releaseTimeFor(Math.max(settledAt, windowEnds)) : null,
+      releaseAt: settledAt && !refund && !returnOpen && time >= windowEnds ? releaseTimeFor(Math.max(settledAt, windowEnds)) : null,
       product: items[0]?.name || '—', moreItems: Math.max(0, items.length - 1), quantity: items.reduce((total, item) => total + (item.qty || 0), 0),
       items: items.map(({ name, variation, qty, price }) => ({ name, variation, qty, price })), customer: order.buyer?.name || '', paymentMethod: sale.payment_method,
       paymentReference: sale.payment_reference, commissionRate: sale.commission_rate, orderStatus: order.status,
@@ -160,12 +189,12 @@ const toPayout = (row, full = false) => ({
   requestedAt: row.requested_at, processingAt: row.processing_at, completedAt: row.completed_at, rejectedAt: row.rejected_at, processedBy: full ? row.processed_by : undefined,
 });
 
-// Withdrawn money is matched to available orders, oldest first, so each order shows whether it
+// Withdrawn money is matched to released orders, oldest first, so each order shows whether it
 // has been paid out. Completed payouts are matched before ones still in progress.
 function withPayoutStatus(records, payouts) {
   let completed = sum(payouts.filter((p) => p.status === 'completed'), 'amount');
   let inProgress = sum(payouts.filter((p) => OPEN_PAYOUT.includes(p.status)), 'amount');
-  const available = records.filter((record) => record.status === 'available').sort((a, b) => a.availableAt - b.availableAt);
+  const available = records.filter((record) => record.status === 'released').sort((a, b) => a.releasedAt - b.releasedAt);
   const states = new Map();
   available.forEach((record) => {
     let left = record.net;
@@ -184,12 +213,16 @@ function balances(records, payouts) {
   const byStatus = (status) => sum(records.filter((record) => record.status === status), 'net');
   const payoutSum = (status) => sum(payouts.filter((p) => p.status === status), 'amount');
   const count = (status) => payouts.filter((p) => p.status === status).length;
-  const earned = byStatus('available');
+  const released = byStatus('released');
   const committed = sum(payouts.filter((p) => p.status !== 'rejected' && p.status !== 'cancelled'), 'amount');
   return {
-    available: money(Math.max(0, earned - committed)),
+    // What can be withdrawn: released income minus every payout that wasn't rejected or cancelled.
+    available: money(Math.max(0, released - committed)),
+    released,
+    pendingRelease: byStatus('pending_release'),
     pendingSettlement: byStatus('pending'),
     onHold: byStatus('on_hold'),
+    notYetEligible: money(byStatus('pending') + byStatus('on_hold')),
     withdrawn: payoutSum('completed'),
     payouts: {
       pending: { amount: payoutSum('pending'), count: count('pending') },
@@ -233,9 +266,23 @@ export function incomeOverview(seller) {
     if (entry.kind === 'sale') bucket.orders += 1;
   });
   const lifetime = totalsOf(all);
+  const balance = balances(records, payouts);
+  const upcoming = nextRelease(time);
   return {
+    // The four headline figures. Total = released + pending release + not yet eligible.
+    income: {
+      pending: balance.pendingRelease,
+      released: balance.released,
+      month: since(monthStart),
+      total: lifetime.netIncome,
+      notYetEligible: balance.notYetEligible,
+      cycle: { from: weekStartOf(time), to: weekStartOf(time) + 7 * DAY - 60 * 1000, nextRelease: upcoming },
+      // Pending income by the Tuesday it is released, soonest first.
+      releases: Object.entries(records.filter((r) => r.status === 'pending_release').reduce((by, r) => ({ ...by, [r.releaseAt]: money((by[r.releaseAt] || 0) + r.net) }), {}))
+        .map(([at, amount]) => ({ at: Number(at), amount })).sort((a, b) => a.at - b.at),
+    },
     totals: { totalEarnings: lifetime.netIncome, totalSales: lifetime.grossSales, productRevenue: lifetime.productRevenue, orders: lifetime.orders, today: since(today), week: since(weekStart), month: since(monthStart) },
-    balance: balances(records, payouts),
+    balance,
     trend: Object.values(daily),
     payouts: payouts.slice(0, 10).map((row) => toPayout(row)),
     minPayout: MIN_PAYOUT,

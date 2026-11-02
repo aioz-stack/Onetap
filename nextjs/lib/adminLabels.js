@@ -139,7 +139,8 @@ export const options = (statuses) => Object.entries(statuses).map(([value, { lab
 export const INCOME_STATUS = {
   pending: { label: 'Awaiting Settlement', tone: 'warn' },
   on_hold: { label: 'In Return Window', tone: 'info' },
-  available: { label: 'Available', tone: 'ok' },
+  pending_release: { label: 'Pending Release', tone: 'warn' },
+  released: { label: 'Released', tone: 'ok' },
   refunded: { label: 'Refunded', tone: 'neutral' },
 };
 
