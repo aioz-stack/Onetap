@@ -618,6 +618,46 @@ export function getDb() {
     );
     CREATE INDEX IF NOT EXISTS phone_verifications_phone ON phone_verifications (phone, sent_at);
     CREATE INDEX IF NOT EXISTS phone_verifications_ip ON phone_verifications (ip, sent_at);
+    -- A seller's income ledger: one sale and at most one refund per delivered order, never edited.
+    CREATE TABLE IF NOT EXISTS seller_income_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      seller TEXT NOT NULL,
+      order_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      gross REAL NOT NULL,
+      product_revenue REAL NOT NULL,
+      shipping_fee REAL NOT NULL,
+      platform_fee REAL NOT NULL,
+      commission REAL NOT NULL,
+      refund REAL NOT NULL,
+      deduction REAL NOT NULL,
+      net REAL NOT NULL,
+      at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      UNIQUE (order_id, kind)
+    );
+    CREATE INDEX IF NOT EXISTS seller_income_seller ON seller_income_entries (seller, at);
+    -- Sellers withdrawing their available income. One request open at a time.
+    CREATE TABLE IF NOT EXISTS seller_payouts (
+      id TEXT PRIMARY KEY,
+      reference TEXT NOT NULL UNIQUE,
+      seller TEXT NOT NULL,
+      amount REAL NOT NULL,
+      method TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      account_name TEXT NOT NULL,
+      account_number TEXT NOT NULL,
+      status TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      payout_reference TEXT NOT NULL DEFAULT '',
+      processed_by TEXT NOT NULL DEFAULT '',
+      requested_at INTEGER NOT NULL,
+      processing_at INTEGER,
+      completed_at INTEGER,
+      rejected_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS seller_payouts_seller ON seller_payouts (seller, requested_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS seller_one_payout ON seller_payouts (seller) WHERE status IN ('pending', 'processing');
     CREATE TABLE IF NOT EXISTS admin_notification_reads (
       username TEXT PRIMARY KEY COLLATE NOCASE,
       last_id INTEGER NOT NULL

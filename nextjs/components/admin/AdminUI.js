@@ -237,12 +237,14 @@ const GAP = 2;
 const shortDay = (day) => new Date(`${day}T00:00:00+08:00`).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' });
 
 // Grouped bars for up to two series on one scale, with a hover readout and a table for screen readers.
-export function TrendChart({ title, series, money }) {
+// `labelEvery` spaces the day labels out on long ranges. Negative days (refunds) draw no bar but read out in the tooltip.
+export function TrendChart({ title, series, money, labelEvery = 3 }) {
   const [hover, setHover] = useState(null);
   const days = series[0].values;
   const max = Math.max(1, ...series.flatMap((s) => s.values.map((v) => v.value)));
   const slot = WIDTH / days.length;
-  const barWidth = Math.min(16, (slot - 6) / series.length - GAP);
+  // Narrow slots on long ranges still get a visible bar.
+  const barWidth = Math.max(2, Math.min(16, (slot - Math.min(6, slot * 0.3)) / series.length - GAP));
   const format = (value) => (money ? peso(value) : value.toLocaleString('en-PH'));
 
   return (
@@ -261,11 +263,11 @@ export function TrendChart({ title, series, money }) {
           {days.map((day, i) => (
             <g key={day.day}>
               {series.map((s, j) => {
-                const height = (s.values[i].value / max) * (HEIGHT - 8);
+                const height = (Math.max(0, s.values[i].value) / max) * (HEIGHT - 8);
                 const x = i * slot + (slot - series.length * (barWidth + GAP)) / 2 + j * (barWidth + GAP);
                 return height ? <rect className={`admin-bar admin-bar--${s.tone}`} key={s.label} x={x} y={HEIGHT - height} width={barWidth} height={height} rx="3" /> : null;
               })}
-              {i % 3 === 0 && <text x={i * slot + slot / 2} y={HEIGHT + 14} textAnchor="middle">{shortDay(day.day)}</text>}
+              {i % labelEvery === 0 && <text x={Math.min(WIDTH - 18, Math.max(18, i * slot + slot / 2))} y={HEIGHT + 14} textAnchor="middle">{shortDay(day.day)}</text>}
               <rect className="admin-chart__hit" x={i * slot} y="0" width={slot} height={HEIGHT} onMouseEnter={() => setHover(i)} />
             </g>
           ))}

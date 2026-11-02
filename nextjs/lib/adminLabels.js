@@ -134,3 +134,28 @@ export const HANDOVER_STATUS = {
 };
 
 export const options = (statuses) => Object.entries(statuses).map(([value, { label }]) => [value, label]);
+
+// Seller income: where an order's net earnings are, and whether they have been withdrawn.
+export const INCOME_STATUS = {
+  pending: { label: 'Awaiting Settlement', tone: 'warn' },
+  on_hold: { label: 'In Return Window', tone: 'info' },
+  available: { label: 'Available', tone: 'ok' },
+  refunded: { label: 'Refunded', tone: 'neutral' },
+};
+
+export const INCOME_PAYOUT_STATUS = {
+  not_available: { label: 'Not Yet Available', tone: 'neutral' },
+  not_withdrawn: { label: 'Not Withdrawn', tone: 'info' },
+  partly_withdrawn: { label: 'Partly Withdrawn', tone: 'warn' },
+  in_payout: { label: 'In Payout', tone: 'warn' },
+  paid_out: { label: 'Paid Out', tone: 'ok' },
+  none: { label: 'None', tone: 'neutral' },
+};
+
+export const PAYOUT_STATUS = {
+  pending: { label: 'Pending', tone: 'warn' },
+  processing: { label: 'Processing', tone: 'info' },
+  completed: { label: 'Completed', tone: 'ok' },
+  rejected: { label: 'Rejected', tone: 'danger' },
+  cancelled: { label: 'Cancelled', tone: 'neutral' },
+};

@@ -69,7 +69,7 @@ export const SELLER_NAV = [
   { label: 'Fulfilment', icon: 'truck', open: true, items: [{ label: 'Fulfilled by Onetap' }] },
   { label: 'Marketing Centre', icon: 'megaphone', open: true, items: [{ label: 'Marketing Centre' }, { label: 'Onetap Ads' }, { label: 'External Traffic Ads' }, { label: 'Affiliate Marketing' }, { label: 'Live & Video' }, { label: 'Discount' }, { label: "My Shop's Flash Deals" }, { label: 'Vouchers' }, { label: 'Campaign' }, { label: 'Best Price on Onetap' }] },
   { label: 'Customer Service', icon: 'chat', open: true, items: [{ label: 'Chat Management', href: '/seller/chat' }, { label: 'Chat AI Assistant' }, { label: 'Review Management' }] },
-  { label: 'Finance', icon: 'wallet', open: true, items: [{ label: 'My Income' }, { label: 'My Balance' }, { label: 'Bank Accounts' }, { label: 'Seller Loans' }] },
+  { label: 'Finance', icon: 'wallet', open: true, items: [{ label: 'My Income', href: '/seller/income' }, { label: 'My Balance', href: '/seller/income/payouts' }, { label: 'Bank Accounts' }, { label: 'Seller Loans' }] },
   { label: 'Data', icon: 'chart', open: true, items: [{ label: 'Business Insights' }, { label: 'Account Health' }] },
   { label: 'Shop', icon: 'store', open: true, items: [{ label: 'Shop Information', action: 'shop' }, { label: 'Shop Decoration' }, { label: 'Shop Setting' }, { label: 'Appeal Management' }] },
 ];

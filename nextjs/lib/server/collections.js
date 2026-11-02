@@ -49,7 +49,7 @@ export function recordCollection(order, shipment, at) {
 }
 
 // Delivered orders from before this existed, recorded with today's commission rate.
-function backfill() {
+export function backfill() {
   const missing = db().prepare(`
     SELECT o.data, s.id, s.partner_id, s.partner_name, s.delivered_at FROM orders o JOIN shipments s ON s.order_id = o.id AND s.status = 'delivered'
     WHERE NOT EXISTS (SELECT 1 FROM collection_records c WHERE c.order_id = o.id)

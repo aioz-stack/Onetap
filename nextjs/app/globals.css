@@ -1071,6 +1071,58 @@ button.topnav__item:hover, a.topnav__item:hover, .topnav__follow a:hover { color
   .approval-banner__row { flex-wrap: wrap; }
   .approval-banner__row .btn { width: 100%; }
 }
+/* Seller Centre: My Income */
+.income-page { gap: 14px; }
+.income-nav a { flex: 1 0 auto; padding: 7px 12px; border-radius: 9px; color: var(--muted); font-size: 14px; font-weight: 600; text-align: center; white-space: nowrap; text-decoration: none; }
+.income-nav a:hover { color: var(--text); }
+.income-nav a[aria-current="page"] { background: var(--surface); color: var(--link); box-shadow: var(--shadow); }
+.income-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.income-pair .panel { margin: 0; }
+.income-toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.income-toggles .order-tabs { margin: 0; }
+.income-table-toggle summary, .income-explainer summary { cursor: pointer; color: var(--link); font-size: 14px; font-weight: 600; }
+.income-explainer ul { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 0; padding-left: 18px; font-size: 14px; }
+.income-scroll { min-width: 0; margin-top: 8px; overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+.income-table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.income-table th, .income-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+.income-table th:first-child { text-align: left; }
+.income-table thead th { color: var(--muted); font-size: 13px; font-weight: 600; }
+.income-table tfoot th, .income-table tfoot td { border-bottom: 0; font-weight: 700; }
+.income-controls { display: flex; flex-direction: column; gap: 10px; }
+.income-controls__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.income-controls__spacer { flex: 1; }
+.income-controls .btn-mini svg { width: 16px; height: 16px; }
+.income-statement { display: flex; flex-direction: column; gap: 12px; }
+.income-statement__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; }
+.income-statement__head h2 { font-size: 20px; }
+.income-statement__head p, .income-statement__note { margin: 0; font-size: 14px; }
+.income-statement h3 { margin: 6px 0 0; font-size: 16px; }
+.income-lines { display: flex; flex-direction: column; margin: 0; max-width: 560px; font-variant-numeric: tabular-nums; }
+.income-lines > div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.income-lines dd { margin: 0; white-space: nowrap; }
+.income-lines .is-total { border-bottom: 2px solid var(--text); font-weight: 700; }
+.income-items { display: flex; flex-direction: column; margin: 0 0 8px; padding: 0; list-style: none; font-size: 14px; }
+.income-items li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.income-totals { margin: 0; font-size: 14px; }
+.income-balance { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.income-balance__amount { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+.income-balance .admin-stats { align-self: stretch; }
+.income-balance > p { margin: 0; font-size: 14px; }
+@media (max-width: 760px) {
+  .income-pair { grid-template-columns: minmax(0, 1fr); }
+  .income-toggles { margin-left: 0; }
+  .income-controls__spacer { display: none; }
+  .income-page .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* The Income Statement prints on its own, without the Seller Centre frame. */
+@media print {
+  .seller-bar, .seller-nav, .income-nav, .income-controls, .admin-head, .chat-launcher, .chat, .toasts, .skip-link { display: none !important; }
+  .seller-shell, .seller-content, .income-page { display: block !important; padding: 0 !important; }
+  .income-statement { border: 0; box-shadow: none; }
+  .income-scroll { overflow: visible; border: 0; }
+  .income-table { min-width: 0; font-size: 11px; }
+}
+
 /* My Profile */
 .profile { display: flex; flex-direction: column; gap: 14px; max-width: 1200px; padding-block: 24px 72px; }
 .profile h1 { font-size: 24px; font-weight: 800; letter-spacing: -.3px; }
