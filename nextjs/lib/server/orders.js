@@ -2,7 +2,8 @@
 // transaction. Every action checks the order's current state before it changes anything.
 
 import { randomBytes } from 'node:crypto';
-import { checkoutShippingFee, findSaleRow, salePrice, withStockChange } from '../products';
+import { checkoutQuote, findSaleRow, salePrice, withStockChange } from '../products';
+import { checkoutLines, removeOrdered } from './cart';
 import { createCodRecord, voidCodRecord } from './cod';
 import { logisticsOptions } from './logistics';
 import { audit } from './admin';
@@ -114,8 +115,8 @@ function createOrder(customer, seller, lines, { address, zone, payment, checkout
     product: row.id, variation, qty, price, name: product.name, image: product.images[0],
   }));
   const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const shippingFee = checkoutShippingFee(lines, zone, logisticsOptions());
-  if (!shippingFee) throw new ApiError(409, 'No courier delivers to that area right now.');
+  const { fee: shippingFee, partner } = checkoutQuote(lines, zone, logisticsOptions());
+  if (!shippingFee) throw new ApiError(409, 'No courier delivers to that area with Cash on Delivery right now.');
   const placedAt = new Date();
   const prepareDays = Math.max(STANDARD_PREPARE_DAYS, ...lines.map(({ product }) => (product.preOrder ? Number(product.preOrderDays) : 0)));
   const cod = payment === 'Cash on Delivery';
@@ -136,6 +137,8 @@ function createOrder(customer, seller, lines, { address, zone, payment, checkout
     items,
     subtotal,
     shippingFee,
+    // The partner whose rates set the shipping fee. Pickups offer it first when the seller lets Onetap choose.
+    shippingPartner: partner,
     voucher: 0,
     total: subtotal + shippingFee,
     payment,
@@ -152,12 +155,14 @@ function createOrder(customer, seller, lines, { address, zone, payment, checkout
 }
 
 // All or nothing: if any item fails, no order is created and no stock moves.
+// Orders the items ticked in the customer's cart (cart_items), one order per shop, and takes them out
+// of the cart. Unticked items stay. `expect` is what the checkout page showed ([{ key, qty }]): if the
+// cart has changed since, say in another tab, nothing is ordered and the buyer checks again.
 export function placeOrders(customer, input) {
-  const { lines, address, zone, payment, checkoutKey } = input || {};
-  if (!Array.isArray(lines) || !lines.length || lines.length > MAX_LINES) throw new ApiError(422, 'Your cart is empty.');
+  const { address, zone, payment, checkoutKey, expect } = input || {};
   checkAddress(address);
   if (!SHIPPING_ZONES.includes(zone)) throw new ApiError(422, 'Choose your delivery area.');
-  if (!PAYMENT_METHODS.includes(payment)) throw new ApiError(422, 'Choose a payment method.');
+  if (!PAYMENT_METHODS.includes(payment)) throw new ApiError(422, 'Checkout takes Cash on Delivery only.');
 
   const key = typeof checkoutKey === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(checkoutKey) ? checkoutKey : '';
 
@@ -165,6 +170,11 @@ export function placeOrders(customer, input) {
     // A repeated submission gets its first result back, not a second set of orders.
     const earlier = key && getDb().prepare('SELECT orders FROM checkouts WHERE customer = ? AND key = ?').get(customer.username, key);
     if (earlier) return JSON.parse(earlier.orders).map((id) => toOrder(getDb().prepare('SELECT * FROM orders WHERE id = ?').get(id)));
+    const lines = checkoutLines(customer.username);
+    if (!lines.length) throw new ApiError(422, 'Select at least one item to check out.');
+    if (lines.length > MAX_LINES) throw new ApiError(422, `Check out up to ${MAX_LINES} items at a time.`);
+    const shown = Array.isArray(expect) ? expect.map((item) => `${item?.key}×${item?.qty}`).sort().join('|') : '';
+    if (shown !== lines.map((line) => `${line.key}×${line.qty}`).sort().join('|')) throw new ApiError(409, 'Your cart changed. Check your order summary and place it again.');
     const bySeller = new Map();
     lines.forEach((line) => {
       const resolved = resolveLine(line);
@@ -174,6 +184,7 @@ export function placeOrders(customer, input) {
     });
     const checkoutId = randomBytes(6).toString('hex');
     const orders = [...bySeller].map(([seller, group]) => createOrder(customer, seller, group, { address, zone, payment, checkoutId }));
+    removeOrdered(customer.username, lines);
     if (key) getDb().prepare('INSERT INTO checkouts (customer, key, orders, at) VALUES (?, ?, ?, ?)').run(customer.username, key, JSON.stringify(orders.map((order) => order.id)), Date.now());
     return orders;
   });

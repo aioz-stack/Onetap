@@ -3,6 +3,7 @@ import ChatBox from '@/components/ChatBox';
 import Header from '@/components/Header';
 import { CustomerApprovalBanner, CustomerSession, Footer, ModalHost, RouteFocus, Toasts } from '@/components/Overlays';
 import { StorefrontProvider } from '@/components/Storefront';
+import { CartSync } from '@/lib/cart';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -39,6 +40,7 @@ export default function RootLayout({ children }) {
           <Toasts />
           <RouteFocus />
           <CustomerSession />
+          <CartSync />
         </StorefrontProvider>
       </body>
     </html>

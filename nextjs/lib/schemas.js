@@ -238,7 +238,8 @@ export function serviceAddressErrors({ city, province, zip }) {
   return errors;
 }
 
-export const PAYMENT_METHODS = ['Cash on Delivery', 'OnetapPay', 'Credit / Debit Card'];
+// Checkout takes Cash on Delivery only. Older OnetapPay and card orders keep their method and Pay button.
+export const PAYMENT_METHODS = ['Cash on Delivery'];
 
 export const BUYER_CANCEL_SCHEMA = [{
   fields: [{ name: 'reason', label: 'Reason', type: 'select', options: ['Ordered the wrong item', 'Changed my mind', 'Found a better price', 'Delivery is taking too long'], wide: true }],

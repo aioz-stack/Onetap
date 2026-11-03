@@ -519,6 +519,19 @@ export function getDb() {
     );
     CREATE INDEX IF NOT EXISTS rider_duty_events_rider ON rider_duty_events (rider_id, id);
   `);
+  // A signed-in customer's cart: one row per product and variation, whether it is ticked for
+  // checkout, and when it was added, which sets its order. Guests keep theirs in the browser.
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS cart_items (
+      customer TEXT NOT NULL,
+      item_key TEXT NOT NULL,
+      qty INTEGER NOT NULL,
+      selected INTEGER NOT NULL DEFAULT 1,
+      added_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (customer, item_key)
+    );
+  `);
   // A new task's notice keeps the order, customer, pickup location and assignment time as JSON.
   addColumns(database, 'rider_notifications', { details: "TEXT NOT NULL DEFAULT ''" });
   // The rider who collected a COD parcel's cash, and the remittance they handed it over in.

@@ -8,10 +8,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { openCustomerLogin } from './Auth';
 import Icon from './Icon';
 import { RichText } from './RichText';
-import { CATEGORIES, PRODUCT_CATEGORIES, PRODUCTS } from '@/lib/data';
+import { Cart, isSampleItem, useCart } from '@/lib/cart';
+import { CATEGORIES, PRODUCT_CATEGORIES, PRODUCTS, SHOPS } from '@/lib/data';
 import { Chat } from '@/lib/chat';
-import { salePrice, saleRows, totalStock } from '@/lib/products';
-import { Auth, Store, useStored } from '@/lib/store';
+import { findSaleRow, salePrice, saleRows, totalStock } from '@/lib/products';
+import { Auth, Store } from '@/lib/store';
 import { createState, Modal, peso, toast } from '@/lib/ui';
 
 const StorefrontContext = createContext(null);
@@ -51,16 +52,6 @@ function matches(product, category, query) {
   const text = `${product.name} ${product.category}`.toLowerCase();
   return inCategory && words.every((w) => text.includes(w));
 }
-
-export const Cart = {
-  change(id, delta) {
-    const items = Store.get('cart', {});
-    const qty = (items[id] || 0) + delta;
-    if (qty > 0) items[id] = qty;
-    else delete items[id];
-    Store.set('cart', items);
-  },
-};
 
 // Products sellers have published, in the shape the sample products use.
 export const liveProducts = createState([]);
@@ -241,20 +232,68 @@ export function DealsLink({ children, ...props }) {
   );
 }
 
+// The cart by store, oldest first: stores in the order their first item was added, and each store's
+// items in the order they were added. Only items on sale from an Onetap seller can be ticked.
+export function groupCart(items, live) {
+  const stores = new Map();
+  [...items].sort((a, b) => a.addedAt - b.addedAt).forEach((item) => {
+    const product = findCartItem(item.key, live);
+    const listing = product?.listing;
+    const sample = isSampleItem(item.key);
+    const id = listing ? listing.seller : sample ? product.shop : 'unavailable';
+    const name = listing ? listing.shopName : sample ? SHOPS.find((shop) => shop.id === product.shop)?.name || 'Demo shop' : 'No longer available';
+    const stock = listing ? Number(findSaleRow(listing, product.variation)?.stock) || 0 : 0;
+    const store = stores.get(id) || { id, name, items: [] };
+    store.items.push({ ...item, product, buyable: Boolean(listing) && stock > 0, stock, sample });
+    stores.set(id, store);
+  });
+  return [...stores.values()];
+}
+
+// A checkbox that can also show "some ticked".
+export function Tick({ checked, indeterminate = false, disabled = false, onChange, label, children }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+  return (
+    <label className="tick">
+      <input ref={ref} type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} aria-label={label} />
+      {children}
+    </label>
+  );
+}
+
+export function QtyStepper({ item, name }) {
+  return (
+    <div className="stepper">
+      <button type="button" aria-label={`Remove one ${name}`} onClick={() => Cart.change(item.key, -1)}>−</button>
+      <span aria-label="Quantity">{item.qty}</span>
+      <button type="button" aria-label={`Add one ${name}`} disabled={item.buyable && item.qty >= item.stock} onClick={() => Cart.change(item.key, 1)}>+</button>
+    </div>
+  );
+}
+
+export function cartItemNote(item) {
+  if (item.sample) return "Demo item, can't be bought";
+  if (!item.product?.listing) return 'No longer available';
+  if (!item.buyable) return 'Sold out';
+  if (item.qty > item.stock) return `Only ${item.stock} left. Lower the quantity to check out.`;
+  return '';
+}
+
 function CartView() {
   const { goToDeals } = useStorefront();
   const router = useRouter();
-  const items = useStored('cart', {});
+  const items = useCart();
   const live = liveProducts.use();
-  const rows = Object.entries(items)
-    .map(([id, qty]) => ({ p: findCartItem(id, live), qty }))
-    .filter((row) => row.p);
 
   useEffect(() => {
     loadLiveProducts();
+    Cart.sync();
   }, []);
 
-  if (!rows.length) {
+  if (!items.length) {
     return (
       <div className="empty">
         <p>Your cart is empty.</p>
@@ -272,46 +311,78 @@ function CartView() {
     );
   }
 
-  const total = rows.reduce((sum, { p, qty }) => sum + p.price * qty, 0);
+  const stores = groupCart(items, live);
+  const buyable = stores.flatMap((store) => store.items).filter((item) => item.buyable);
+  const chosen = buyable.filter((item) => item.selected);
+  const total = chosen.reduce((sum, item) => sum + item.product.price * item.qty, 0);
+  const overStock = chosen.find((item) => item.qty > item.stock);
+  const keys = (list) => list.map((item) => item.key);
+
+  function checkout() {
+    const customer = Auth.session('customer');
+    if (!chosen.length) toast('Select at least one item to check out.');
+    else if (overStock) toast(`Only ${overStock.stock} left of ${overStock.product.name}. Lower the quantity first.`);
+    else if (customer && customer.approvalStatus !== 'approved') {
+      toast(customer.approvalStatus === 'rejected' ? 'Your account is Unverified. Resubmit your valid ID in My Profile.' : "You can check out once your account is Verified. We'll notify you.");
+    } else if (customer) {
+      Modal.close();
+      router.push('/checkout');
+    } else {
+      toast('Log in to check out.');
+      openCustomerLogin();
+    }
+  }
+
   return (
     <>
-      <ul className="cart-list">
-        {rows.map(({ p, qty }) => (
-          <li className="cart-row" key={p.id}>
-            <span className="cart-row__image" style={{ '--tint': p.tint }} aria-hidden="true">{p.image ? <img src={p.image} alt="" /> : p.emoji}</span>
-            <div className="cart-row__text">
-              <strong>{p.name}</strong>
-              <span>{peso(p.price * qty)}</span>
-              <div className="stepper">
-                <button type="button" aria-label={`Remove one ${p.name}`} onClick={() => Cart.change(p.id, -1)}>−</button>
-                <span aria-label="Quantity">{qty}</span>
-                <button type="button" aria-label={`Add one ${p.name}`} onClick={() => Cart.change(p.id, 1)}>+</button>
-              </div>
+      <div className="cart-bar">
+        <Tick checked={buyable.length > 0 && chosen.length === buyable.length} indeterminate={chosen.length > 0 && chosen.length < buyable.length} disabled={!buyable.length} onChange={(on) => Cart.select(null, on)} label="Select all items">
+          <span>Select all ({buyable.length})</span>
+        </Tick>
+      </div>
+      {stores.map((store) => {
+        const own = store.items.filter((item) => item.buyable);
+        const ticked = own.filter((item) => item.selected);
+        return (
+          <section className="cart-store" key={store.id} aria-label={store.name}>
+            <div className="cart-store__head">
+              <Tick checked={own.length > 0 && ticked.length === own.length} indeterminate={ticked.length > 0 && ticked.length < own.length} disabled={!own.length} onChange={(on) => Cart.select(keys(own), on)} label={`Select all items from ${store.name}`}>
+                <Icon name="store" />
+                <strong>{store.name}</strong>
+              </Tick>
             </div>
-            <button className="icon-btn" type="button" aria-label={`Delete ${p.name} from cart`} onClick={() => Cart.change(p.id, -qty)}>
-              <Icon name="trash" />
-            </button>
-          </li>
-        ))}
-      </ul>
-      <div className="cart-total"><span>Subtotal</span><strong>{peso(total)}</strong></div>
-      <button
-        className="btn btn--primary btn--block"
-        type="button"
-        onClick={() => {
-          const customer = Auth.session('customer');
-          if (customer && customer.approvalStatus !== 'approved') {
-            toast(customer.approvalStatus === 'rejected' ? 'Your account is Unverified. Resubmit your valid ID in My Profile.' : 'You can check out once your account is Verified. We\'ll notify you.');
-          } else if (customer) {
-            Modal.close();
-            router.push('/checkout');
-          } else {
-            toast('Log in to check out.');
-            openCustomerLogin();
-          }
-        }}
-      >
-        Checkout
+            <ul className="cart-list">
+              {store.items.map((item) => {
+                const p = item.product;
+                const name = p?.name || 'Unavailable item';
+                const note = cartItemNote(item);
+                return (
+                  <li className="cart-row" key={item.key}>
+                    <Tick checked={item.buyable && item.selected} disabled={!item.buyable} onChange={(on) => Cart.select([item.key], on)} label={`Select ${name}`} />
+                    <span className="cart-row__image" style={{ '--tint': p?.tint }} aria-hidden="true">{p?.image ? <img src={p.image} alt="" /> : p?.emoji}</span>
+                    <div className="cart-row__text">
+                      <strong>{name}</strong>
+                      {p && <span>{peso(p.price * item.qty)}</span>}
+                      {note && <small className={item.buyable ? 'form-error' : 'muted'}>{note}</small>}
+                      <QtyStepper item={item} name={name} />
+                    </div>
+                    <button className="icon-btn" type="button" aria-label={`Delete ${name} from cart`} onClick={() => Cart.remove(item.key)}>
+                      <Icon name="trash" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
+      <div className="cart-total">
+        <span>Subtotal ({chosen.length} selected)</span>
+        <strong>{peso(total)}</strong>
+      </div>
+      <p className="muted cart-hint">{chosen.length ? 'Shipping is added at checkout. Unticked items stay in your cart.' : 'Tick the items you want to check out.'}</p>
+      <button className="btn btn--primary btn--block" type="button" aria-disabled={!chosen.length || Boolean(overStock)} onClick={checkout}>
+        Checkout{chosen.length ? ` (${chosen.length})` : ''}
       </button>
     </>
   );

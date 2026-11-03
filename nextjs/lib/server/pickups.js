@@ -143,7 +143,8 @@ export function courierOptions(pickup, order) {
     return { id: partner.id, name: partner.name, environment: partner.environment, fee, eligible: !problems.length, problem: problems[0] || '', isDefault: partner.isDefault };
   });
   const usable = rows.filter((row) => row.eligible).sort((a, b) => a.fee - b.fee || b.isDefault - a.isDefault);
-  const recommended = usable.find((row) => row.name === pickup.preferred_courier) || usable[0];
+  // The seller's choice first, then the partner whose rates the buyer paid at checkout.
+  const recommended = usable.find((row) => row.name === pickup.preferred_courier) || usable.find((row) => row.id === order.shippingPartner?.id) || usable[0];
   return [...usable, ...rows.filter((row) => !row.eligible)].map(({ isDefault, ...row }) => ({ ...row, recommended: row.id === recommended?.id }));
 }
 

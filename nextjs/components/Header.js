@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { openCustomerLogin, openCustomerSignup } from './Auth';
 import Icon from './Icon';
 import { openCart, useStorefront } from './Storefront';
+import { cartCount as countItems, useCart } from '@/lib/cart';
 import { CONFIG, HOT_DEALS, NOTIFICATIONS } from '@/lib/data';
 import { send } from '@/lib/productsApi';
 import { Auth, Store, useStored } from '@/lib/store';
@@ -227,11 +228,11 @@ export default function Header() {
   const [panel, setPanel] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
   const notifRead = useStored('notifRead', []);
-  const cart = useStored('cart', {});
+  const cart = useCart();
 
   const notices = useDeliveryNotices();
   const unread = NOTIFICATIONS.filter((n) => !notifRead.includes(n.id)).length + notices.unread;
-  const cartCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
+  const cartCount = countItems(cart);
 
   useEffect(() => {
     document.documentElement.lang = lang;

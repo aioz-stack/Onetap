@@ -1,101 +1,92 @@
 'use client';
 
-// Checkout. The summary here is an estimate for the buyer: the server recalculates prices,
-// stock and shipping when the order is placed.
+// Checkout: the items ticked in the cart, one order per store, paid by Cash on Delivery. Each
+// store's shipping fee comes from the rates of the partner that delivers it (`checkoutQuote`), and
+// everything is worked out again whenever the ticked items, quantities or delivery area change. The
+// server recalculates prices, stock and shipping when the order is placed, from the same cart.
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Form, Sections } from './Forms';
-import { confirmModal } from './SellerProducts';
-import { Cart, findCartItem, liveProducts, loadLiveProducts } from './Storefront';
+import { cartItemNote, findCartItem, groupCart, liveProducts, loadLiveProducts, openCart, QtyStepper } from './Storefront';
+import { Cart, useCart } from '@/lib/cart';
 import { SHIPPING_ZONES } from '@/lib/data';
-import { checkoutShippingFee, findSaleRow } from '@/lib/products';
+import { checkoutQuote } from '@/lib/products';
 import { logisticsOptions } from '@/lib/productsApi';
 import { Purchases } from '@/lib/purchases';
 import { checkoutSchema, PAYMENT_METHODS, serviceAddressErrors } from '@/lib/schemas';
-import { FieldError, useStored } from '@/lib/store';
+import { FieldError } from '@/lib/store';
 import { peso, toast } from '@/lib/ui';
 
-function groupByShop(rows) {
-  const shops = new Map();
-  rows.forEach((row) => {
-    const { seller, shopName } = row.product.listing;
-    const shop = shops.get(seller) || { seller, shopName, rows: [] };
-    shops.set(seller, { ...shop, rows: [...shop.rows, row] });
-  });
-  return [...shops.values()];
-}
+const COD = PAYMENT_METHODS[0];
 
 export default function Checkout({ customer }) {
   const router = useRouter();
-  const cart = useStored('cart', {});
+  const items = useCart();
   const live = liveProducts.use();
   const [loaded, setLoaded] = useState(false);
   const [partners, setPartners] = useState([]);
   const [zone, setZone] = useState(SHIPPING_ZONES[0]);
-  const [payment, setPayment] = useState(PAYMENT_METHODS[0]);
   const checkoutKey = useRef('');
 
   useEffect(() => {
-    Promise.all([loadLiveProducts(), logisticsOptions().then(setPartners).catch(() => {})]).finally(() => setLoaded(true));
+    Promise.all([loadLiveProducts(), Cart.sync(), logisticsOptions().then(setPartners).catch(() => {})]).finally(() => setLoaded(true));
   }, []);
 
-  const rows = useMemo(() => Object.entries(cart).map(([key, qty]) => ({ key, qty, product: findCartItem(key, live) })), [cart, live]);
-  const unavailable = rows.filter((row) => !row.product?.listing);
-  const shops = groupByShop(rows.filter((row) => row.product?.listing));
-  const priced = shops.map((shop) => ({
-    ...shop,
-    fee: checkoutShippingFee(shop.rows.map((row) => ({ product: row.product.listing, qty: row.qty })), zone, partners),
-    subtotal: shop.rows.reduce((sum, row) => sum + row.product.price * row.qty, 0),
-  }));
-  const total = priced.reduce((sum, shop) => sum + shop.subtotal + shop.fee, 0);
-  const overStock = priced.flatMap((shop) => shop.rows).filter((row) => Number(findSaleRow(row.product.listing, row.product.variation)?.stock) < row.qty);
+  // A changed cart is a new checkout, so a retry after a change can't return the earlier result.
+  const chosenKeys = items.filter((item) => item.selected).map((item) => `${item.key}×${item.qty}`).join('|');
+  useEffect(() => {
+    checkoutKey.current = '';
+  }, [chosenKeys, zone]);
+
+  const stores = groupCart(items, live)
+    .map((store) => ({ ...store, items: store.items.filter((item) => item.buyable && item.selected) }))
+    .filter((store) => store.items.length)
+    .map((store) => {
+      const quote = checkoutQuote(store.items.map((item) => ({ product: item.product.listing, qty: item.qty })), zone, partners);
+      const subtotal = store.items.reduce((sum, item) => sum + item.product.price * item.qty, 0);
+      return { ...store, quote, subtotal, total: subtotal + quote.fee };
+    });
+  const lines = stores.flatMap((store) => store.items);
+  const left = items.filter((item) => !lines.some((line) => line.key === item.key));
+  const subtotal = stores.reduce((sum, store) => sum + store.subtotal, 0);
+  const shipping = stores.reduce((sum, store) => sum + store.quote.fee, 0);
+  const overStock = lines.find((item) => item.qty > item.stock);
+  const noCourier = stores.find((store) => !store.quote.partner);
 
   async function place(address) {
     const [outside] = Object.entries(serviceAddressErrors(address));
     if (outside) throw new FieldError(...outside);
-    const lines = priced.flatMap((shop) => shop.rows.map((row) => ({ productId: row.product.listing.id, variation: row.product.variation, qty: row.qty })));
+    if (!lines.length) throw new Error('Select at least one item to check out.');
     // Kept across a repeated click or a retry, so one checkout can't create two sets of orders.
     checkoutKey.current ||= `${new Date().getTime()}-${Math.random().toString(36).slice(2)}`;
-    let orders;
     try {
-      orders = await Purchases.place({ lines, address, zone, payment, checkoutKey: checkoutKey.current });
+      await Purchases.place({ address, zone, payment: COD, checkoutKey: checkoutKey.current, expect: lines.map((item) => ({ key: item.key, qty: item.qty })) });
     } catch (err) {
       loadLiveProducts();
+      Cart.sync();
       throw err;
     }
-    priced.flatMap((shop) => shop.rows).forEach((row) => Cart.change(row.key, -row.qty));
-    if (payment === 'Cash on Delivery') {
-      toast('Your order was placed.', 'success');
-      router.push('/orders');
-      return;
-    }
-    confirmModal({
-      title: 'Confirm payment',
-      body: `This is a simulated ${payment} payment, so no money moves. If you close this, your order stays unpaid in My Purchases.`,
-      label: `Pay ${peso(orders.reduce((sum, order) => sum + order.total, 0))}`,
-      run: async () => {
-        await Purchases.act(orders.map((order) => order.id), 'pay');
-        toast('Payment confirmed.', 'success');
-        router.push('/orders');
-      },
-    });
+    await Cart.sync();
+    toast(stores.length > 1 ? `${stores.length} orders were placed, one for each store.` : 'Your order was placed.', 'success');
+    router.push('/orders');
   }
 
   if (!loaded) {
     return <section className="container checkout"><h1 tabIndex={-1}>Checkout</h1><div className="skeleton" role="status" aria-label="Loading your cart" /></section>;
   }
 
-  if (!priced.length) {
+  if (!stores.length) {
+    const anyBuyable = items.some((item) => findCartItem(item.key, live)?.listing);
     return (
       <section className="container checkout">
         <h1 tabIndex={-1}>Checkout</h1>
         <div className="panel order-empty">
-          <h2>{unavailable.length ? 'Nothing in your cart can be ordered' : 'Your cart is empty'}</h2>
-          {unavailable.length > 0 && <p className="muted">Demo products can't be bought. Add a product sold by an Onetap seller.</p>}
+          <h2>{!items.length ? 'Your cart is empty' : anyBuyable ? 'No items selected' : 'Nothing in your cart can be ordered'}</h2>
+          {items.length > 0 && <p className="muted">{anyBuyable ? 'Tick the items you want in your cart, then check out.' : "Demo products can't be bought. Add a product sold by an Onetap seller."}</p>}
           <div className="checkout__links">
-            <Link className="btn-mini btn-mini--primary" href="/#products">Browse Deals</Link>
+            {items.length > 0 ? <button className="btn-mini btn-mini--primary" type="button" onClick={openCart}>Open Cart</button> : <Link className="btn-mini btn-mini--primary" href="/#products">Browse Deals</Link>}
             <Link className="btn-mini" href="/orders">View My Purchases</Link>
           </div>
         </div>
@@ -118,47 +109,63 @@ export default function Checkout({ customer }) {
             </div>
           </section>
 
-          {priced.map((shop) => (
-            <section className="panel" key={shop.seller}>
-              <div className="panel__head"><h2>{shop.shopName}</h2></div>
+          {stores.map((store, i) => (
+            <section className="panel checkout-store" key={store.id} aria-label={`Order ${i + 1}: ${store.name}`}>
+              <div className="panel__head">
+                <h2>{store.name}</h2>
+                {stores.length > 1 && <span className="muted">Order {i + 1} of {stores.length}</span>}
+              </div>
               <ul className="order-items">
-                {shop.rows.map((row) => (
-                  <li key={row.key}>
-                    <img className="deal__image" src={row.product.image} alt="" />
-                    <span className="order-items__text">
-                      <strong>{row.product.listing.name}</strong>
-                      {row.product.variation && <small>{row.product.variation}</small>}
-                    </span>
-                    <span className="order-items__qty">x{row.qty}</span>
-                    <span className="order-items__price">{peso(row.product.price * row.qty)}</span>
-                  </li>
-                ))}
+                {store.items.map((item) => {
+                  const note = cartItemNote(item);
+                  return (
+                    <li key={item.key}>
+                      <img className="deal__image" src={item.product.image} alt="" />
+                      <span className="order-items__text">
+                        <strong>{item.product.listing.name}</strong>
+                        {item.product.variation && <small>{item.product.variation}</small>}
+                        <small>{peso(item.product.price)} each</small>
+                        {note && <small className="form-error">{note}</small>}
+                      </span>
+                      <QtyStepper item={item} name={item.product.listing.name} />
+                      <span className="order-items__price">{peso(item.product.price * item.qty)}</span>
+                    </li>
+                  );
+                })}
               </ul>
-              <p className="sales-total">Standard shipping: <strong>{peso(shop.fee)}</strong></p>
+              <dl className="order-sum checkout-store__sum">
+                <div><dt>Subtotal</dt><dd>{peso(store.subtotal)}</dd></div>
+                <div>
+                  <dt>Shipping fee{store.quote.partner && <small> via {store.quote.partner.name}</small>}</dt>
+                  <dd>{store.quote.partner ? peso(store.quote.fee) : 'No courier'}</dd>
+                </div>
+                <div className="order-sum__total"><dt>Store total</dt><dd>{peso(store.total)}</dd></div>
+              </dl>
             </section>
           ))}
 
-          {unavailable.length > 0 && <p className="order-card__note">{unavailable.length === 1 ? '1 demo item stays' : `${unavailable.length} demo items stay`} in your cart, because demo products can't be bought.</p>}
+          {left.length > 0 && <p className="order-card__note">{left.length === 1 ? '1 item stays' : `${left.length} items stay`} in your cart, because {left.length === 1 ? "it isn't" : "they aren't"} ticked or can&apos;t be bought. <button className="link" type="button" onClick={openCart}>Edit your cart</button></p>}
         </div>
 
         <aside className="panel checkout__summary" aria-label="Order summary">
-          <fieldset className="choice choice--stack">
-            <legend>Payment Method</legend>
-            {PAYMENT_METHODS.map((method) => (
-              <label key={method}>
-                <input type="radio" name="payment-choice" checked={payment === method} onChange={() => setPayment(method)} /> {method}
-              </label>
-            ))}
-          </fieldset>
-          {payment !== 'Cash on Delivery' && <p className="muted checkout__note">Online payment is simulated. You won't be asked for card details.</p>}
+          <h2 className="checkout__title">Order Summary</h2>
           <dl className="order-sum">
-            <div><dt>Subtotal</dt><dd>{peso(priced.reduce((sum, shop) => sum + shop.subtotal, 0))}</dd></div>
-            <div><dt>Shipping</dt><dd>{peso(priced.reduce((sum, shop) => sum + shop.fee, 0))}</dd></div>
-            <div className="order-sum__total"><dt>Total</dt><dd>{peso(total)}</dd></div>
+            <div><dt>Payment Method</dt><dd>{COD}</dd></div>
           </dl>
-          {overStock.length > 0 && <p className="form-error">Only {findSaleRow(overStock[0].product.listing, overStock[0].product.variation)?.stock} left of {overStock[0].product.listing.name}. Update your cart.</p>}
+          <p className="muted checkout__note">Pay the rider in cash when your order arrives.</p>
+          <dl className="order-sum">
+            <div><dt>Subtotal ({lines.length} {lines.length === 1 ? 'item' : 'items'})</dt><dd>{peso(subtotal)}</dd></div>
+            <div><dt>Shipping Fee</dt><dd>{peso(shipping)}</dd></div>
+            {stores.length > 1 && stores.map((store) => (
+              <div className="order-sum__sub" key={store.id}><dt>{store.name}{store.quote.partner && `, ${store.quote.partner.name}`}</dt><dd>{peso(store.quote.fee)}</dd></div>
+            ))}
+            <div className="order-sum__total"><dt>Total Amount</dt><dd>{peso(subtotal + shipping)}</dd></div>
+          </dl>
+          {stores.length > 1 && <p className="muted checkout__note">You&apos;ll get {stores.length} orders, one for each store, each delivered and paid for separately.</p>}
+          {overStock && <p className="form-error">Only {overStock.stock} left of {overStock.product.listing.name}. Lower the quantity.</p>}
+          {noCourier && <p className="form-error">No courier delivers {noCourier.name}&apos;s items to {zone} with Cash on Delivery right now.</p>}
           <p className="form-error" role="alert" />
-          <button className="btn btn--primary btn--block" type="submit" disabled={overStock.length > 0}>Place Order</button>
+          <button className="btn btn--primary btn--block" type="submit" disabled={Boolean(overStock || noCourier)}>Place Order · {peso(subtotal + shipping)}</button>
         </aside>
       </Form>
     </section>

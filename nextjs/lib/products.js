@@ -132,12 +132,17 @@ export function shippingEstimates(shipping, partners) {
   }));
 }
 
-// What a buyer pays to ship one shop's items: the lowest partner rate for their combined weight.
-// lines are { product, qty }.
-export function checkoutShippingFee(lines, destination, partners) {
+// What a buyer pays to ship one shop's items, and whose rates set it: the cheapest active partner
+// offered to customers that delivers to the area and takes Cash on Delivery, for the items' combined
+// weight. The default partner wins a tie. lines are { product, qty }. fee is 0 when nobody delivers.
+export function checkoutQuote(lines, destination, partners) {
   const weight = lines.reduce((sum, { product, qty }) => sum + chargeableWeight(product.shipping) * qty, 0);
-  const fees = shippingEstimates({ weight, destination }, partners.filter((partner) => partner.forCustomers)).map((estimate) => estimate.fee);
-  return fees.length ? Math.min(...fees) : 0;
+  const best = partners
+    .filter((partner) => partner.forCustomers && partner.services?.includes('Cash on Delivery') && (partner.deliveryLocations || partner.zones).includes(destination))
+    .map((partner) => ({ partner, fee: shippingEstimates({ weight, destination }, [partner])[0]?.fee }))
+    .filter((quote) => quote.fee)
+    .sort((a, b) => a.fee - b.fee || Number(Boolean(b.partner.isDefault)) - Number(Boolean(a.partner.isDefault)))[0];
+  return best ? { fee: best.fee, partner: { id: best.partner.id, name: best.partner.name } } : { fee: 0, partner: null };
 }
 
 function checkAmount(value, label, errors, field) {
