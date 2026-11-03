@@ -21,6 +21,7 @@
   --header: linear-gradient(100deg, #0b1f3f 0%, #12305e 55%, #1e3a6e 100%);
   --header-text: #e8eef8;
   --header-line: rgba(255, 255, 255, .14);
+  --duty-on: #22c55e;
   --hero-vip: linear-gradient(100deg, #c2410c 0%, #dc2626 38%, #be123c 58%, #ea580c 82%, #f59e0b 100%);
   /* Below 1180px text runs the full width, so the bright amber end has to go. */
   --hero-vip-narrow: linear-gradient(100deg, #c2410c 0%, #dc2626 55%, #be123c 100%);
@@ -55,6 +56,7 @@
   --sale: #fdba74;
   --star: #fbbf24;
   --header: linear-gradient(100deg, #060d1b 0%, #0b1a33 55%, #10264a 100%);
+  --duty-on: #22c55e;
   --hero-vip: linear-gradient(100deg, #9a3412 0%, #b91c1c 38%, #9f1239 58%, #c2410c 82%, #b45309 100%);
   --hero-vip-narrow: linear-gradient(100deg, #9a3412 0%, #b91c1c 55%, #9f1239 100%);
   --hero-flash: linear-gradient(100deg, #4c1d95 0%, #6b21a8 45%, #9d174d 100%);
@@ -1144,6 +1146,17 @@ button.topnav__item:hover, a.topnav__item:hover, .topnav__follow a:hover { color
 .nav-dropdown .nav-count { margin-left: 8px; }
 .rider-nav a { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .rider-nav .nav-count { margin-left: 0; }
+/* Rider Panel header: sign in / sign out for work. The header is dark in both themes. */
+.duty-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px 4px 6px; border: 1px solid var(--header-line); border-radius: 999px; color: inherit; line-height: 1.1; text-align: left; }
+.duty-toggle:hover:not(:disabled) { border-color: var(--header-text); }
+.duty-toggle:disabled { opacity: .7; cursor: progress; }
+.duty-toggle__track { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px; background: rgba(255, 255, 255, .28); transition: background .15s; }
+.duty-toggle__track span { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.duty-toggle[aria-checked="true"] .duty-toggle__track { background: var(--duty-on); }
+.duty-toggle[aria-checked="true"] .duty-toggle__track span { transform: translateX(14px); }
+.duty-toggle__text { display: grid; }
+.duty-toggle__text strong { font-size: 13px; }
+.duty-toggle__text small { font-size: 11px; opacity: .85; }
 .seller-bar__menu { position: relative; }
 .nav-count--menu { position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px; padding: 0 4px; font-size: 10.5px; }
 
@@ -1422,7 +1435,7 @@ img.deal__image { object-fit: cover; }
   .topnav:not(.topnav--right) > .topnav__item, .topnav__item { padding: 10px 0; border: 0; }
   .topnav__item { display: flex; }
   .theme-toggle { align-self: flex-start; margin-block: 8px; }
-  .popover { position: static; width: auto; margin-bottom: 6px; }
+  .topbar .popover { position: static; width: auto; margin-bottom: 6px; }
   .topnav__slot { flex-direction: column; align-items: flex-start; }
   .popover--download { width: 276px; margin-top: 10px; transform: none; }
   .topnav__auth { gap: 22px; padding-left: 0; border: 0; }
@@ -1504,6 +1517,9 @@ img.deal__image { object-fit: cover; }
   .seller-bar__brand span, .seller-bar__icon, .seller-bar__name, .seller-bar .theme-toggle span { display: none; }
   .seller-bar__title { padding-left: 8px; font-size: 14px; }
   .seller-bar__actions { gap: 8px; }
+  /* Just the switch on a phone; its colour and My Tasks show the status, and screen readers still hear it. */
+  .duty-toggle { padding: 4px; }
+  .duty-toggle__text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   /* Riders and administrators keep their notices in the bar on phones. */
   .admin .seller-bar__icon { display: inline-grid; }
   /* On a phone the dropdowns span the screen under the bar. */

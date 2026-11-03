@@ -135,6 +135,8 @@ function riderState(row, open, last) {
     if (open.kind === 'pickup') return 'picking_up';
     return ['ready_for_delivery', 'out_for_delivery'].includes(open.shipment_status) ? 'delivering' : 'in_transit';
   }
+  // Signed out in the Rider Panel: no new tasks until they sign in again.
+  if (!row.on_duty) return 'offline';
   return last === 'completed' ? 'completed' : 'available';
 }
 
@@ -143,7 +145,8 @@ function toRider(row, tasks = [], stats = {}, last, cash = {}) {
   const open = [...tasks].sort((a, b) => TASK_RANK(b) - TASK_RANK(a))[0];
   return {
     id: row.id, firstName: row.first_name, middleName: row.middle_name, lastName: row.last_name, name: fullName(row), phone: row.phone, username: row.username,
-    active: Boolean(row.active), hasLogin: Boolean(row.has_login), status: riderState(row, open, last), available: Boolean(row.active) && !open,
+    active: Boolean(row.active), hasLogin: Boolean(row.has_login), status: riderState(row, open, last), available: Boolean(row.active) && Boolean(row.on_duty) && !open,
+    online: Boolean(row.active) && Boolean(row.on_duty), dutyAt: row.duty_at,
     license: { name: row.license_name, mime: row.license_mime, size: row.license_size },
     current: open ? { id: open.id, kind: open.kind, orderId: open.order_id, shipmentId: open.shipment_id, status: open.status, shipmentStatus: open.shipment_status, assignedAt: open.assigned_at } : null,
     completedPickups: count('pickup', 'completed'), failedPickups: count('pickup', 'failed'), completedDeliveries: count('delivery', 'completed'), failedDeliveries: count('delivery', 'failed'),
@@ -236,7 +239,10 @@ export function setRiderActive(account, id, active) {
     if (!active && (cash?.held || cash?.waiting)) {
       throw new ApiError(409, `${fullName(row)} still has COD cash to settle. They hand it over in the Rider Panel and you confirm it under Rider Remittances first.`);
     }
-    if (!active) endSessions('rider', row.username);
+    if (!active) {
+      endSessions('rider', row.username);
+      if (row.on_duty) recordDuty(row, false, 'deactivated');
+    }
     db().prepare('UPDATE riders SET active = ?, profile = ?, updated_at = ? WHERE id = ?')
       .run(active ? 1 : 0, profileFor({ id: row.id, partnerId: row.partner_id, name: fullName(row), active, hasLogin: row.has_login }), now(), row.id);
     audit(partnerActor(account), active ? 'rider.activated' : 'rider.deactivated', 'rider', row.id, { name: fullName(row) });
@@ -266,7 +272,8 @@ export function riderDetail(partnerId, id) {
   const row = loadRider(partnerId, id);
   const [rider] = partnerRiders(partnerId, 'AND id = ?', row.id);
   const history = db().prepare('SELECT a.*, s.tracking FROM rider_assignments a LEFT JOIN shipments s ON s.id = a.shipment_id WHERE a.rider_id = ? ORDER BY a.assigned_at DESC LIMIT 50').all(row.id).map(toHistory);
-  return { ...rider, history };
+  const duty = db().prepare('SELECT online, source, at FROM rider_duty_events WHERE rider_id = ? ORDER BY id DESC LIMIT 20').all(row.id).map((e) => ({ online: Boolean(e.online), source: e.source, at: e.at }));
+  return { ...rider, history, duty };
 }
 
 const toHistory = (row) => ({
@@ -287,23 +294,32 @@ export function licenseResponse(partnerId, id) {
   });
 }
 
-const RIDER_FILTERS = ['available', 'assigned', 'picking_up', 'in_transit', 'delivering', 'completed', 'inactive'];
+const RIDER_FILTERS = ['available', 'assigned', 'picking_up', 'in_transit', 'delivering', 'completed', 'offline', 'inactive'];
+// Availability lists for the partner: signed in, signed out, and riders with a task in hand.
+const DUTY_FILTERS = {
+  online: (rider) => rider.online,
+  offline: (rider) => rider.active && !rider.online,
+  on_task: (rider) => rider.openTasks > 0,
+};
 
 export function listRiders(params, partnerId) {
   const all = partnerRiders(partnerId);
   const q = text(params.get('q'), 60).toLowerCase();
   const status = params.get('status');
+  const duty = params.get('duty');
   const matches = all.filter((rider) => (!q || rider.name.toLowerCase().includes(q) || rider.username.includes(q) || rider.phone.includes(q.replace(/\D/g, '') || q))
-    && (!RIDER_FILTERS.includes(status) || rider.status === status));
+    && (!RIDER_FILTERS.includes(status) || rider.status === status)
+    && (!Object.hasOwn(DUTY_FILTERS, duty) || DUTY_FILTERS[duty](rider)));
   if (params.get('format') === 'csv') {
     return csvResponse('onetap-riders.csv', [
-      ['Name', (r) => r.name], ['Contact number', (r) => r.phone], ['Status', (r) => r.status], ['Current task', (r) => (r.current ? `${r.current.kind} ${r.current.orderId}` : '')],
+      ['Name', (r) => r.name], ['Contact number', (r) => r.phone], ['Status', (r) => r.status], ['Availability', (r) => (r.online ? 'online' : 'offline')], ['Current task', (r) => (r.current ? `${r.current.kind} ${r.current.orderId}` : '')],
       ['Completed pickups', (r) => r.completedPickups], ['Completed deliveries', (r) => r.completedDeliveries], ['Failed deliveries', (r) => r.failedDeliveries], ['Username', (r) => r.username], ['Registered', (r) => isoDate(r.createdAt)],
     ], matches);
   }
   const page = Math.max(1, Number(params.get('page')) || 1);
   const counts = Object.fromEntries(RIDER_FILTERS.map((value) => [value, all.filter((rider) => rider.status === value).length]));
-  return Response.json({ rows: matches.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), total: matches.length, page, pageSize: PAGE_SIZE, counts, metrics: riderMetrics(partnerId, all) });
+  const dutyCounts = Object.fromEntries(Object.entries(DUTY_FILTERS).map(([value, test]) => [value, all.filter(test).length]));
+  return Response.json({ rows: matches.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), total: matches.length, page, pageSize: PAGE_SIZE, counts, dutyCounts, metrics: riderMetrics(partnerId, all) });
 }
 
 function riderMetrics(partnerId, riders) {
@@ -313,6 +329,8 @@ function riderMetrics(partnerId, riders) {
   return {
     total: riders.length,
     available: riders.filter((rider) => rider.available).length,
+    online: riders.filter((rider) => rider.online).length,
+    offline: riders.filter((rider) => rider.active && !rider.online).length,
     assigned: riders.filter((rider) => rider.current).length,
     pendingPickups: pending,
     pickupsWithoutRider: unassigned,
@@ -336,7 +354,7 @@ export function assignmentOptions(detail, partnerId) {
     pickup,
     delivery,
     open: { pickup: open('pickup'), delivery: open('delivery') },
-    riders: pickup || delivery ? partnerRiders(partnerId, 'AND active = 1').map(({ id, name, phone, status, openTasks }) => ({ id, name, phone, status, openTasks })) : [],
+    riders: pickup || delivery ? partnerRiders(partnerId, 'AND active = 1').map(({ id, name, phone, status, openTasks, online }) => ({ id, name, phone, status, openTasks, online })) : [],
   };
 }
 
@@ -350,6 +368,8 @@ export function assignRider(account, shipmentId, input) {
   if (!options[kind]) throw new ApiError(409, kind === 'pickup' ? "This pickup can't take a rider right now. Refresh and try again." : "This parcel isn't ready for a delivery rider. Its pickup rider must collect it first.");
   const rider = loadRider(account.partnerId, input.riderId);
   if (!rider.active) throw new ApiError(409, 'Only active riders can be assigned.');
+  // A rider who has signed out in the Rider Panel takes no new tasks.
+  if (!rider.on_duty) throw new ApiError(409, `${fullName(rider)} is offline. Only riders who have signed in can get new tasks.`);
   // Assigning a rider accepts a new pickup, so a rider never goes for a parcel the courier hasn't accepted.
   if (kind === 'pickup' && detail.pickup.status === 'scheduled') {
     reportStatus(ownShipment(shipmentId, account.partnerId), detail, { status: 'pickup_confirmed' }, account.name, partnerActor(account));
@@ -571,7 +591,7 @@ export function riderHome(rider) {
   const row = db().prepare('SELECT * FROM riders WHERE id = ?').get(rider.riderId);
   const [me] = partnerRiders(rider.partnerId, 'AND id = ?', rider.riderId);
   return {
-    rider: { name: fullName(row), phone: row.phone, username: row.username, partner: loadPartner(rider.partnerId).name, status: me.status, completedPickups: me.completedPickups, completedDeliveries: me.completedDeliveries },
+    rider: { name: fullName(row), phone: row.phone, username: row.username, partner: loadPartner(rider.partnerId).name, status: me.status, online: me.online, completedPickups: me.completedPickups, completedDeliveries: me.completedDeliveries },
     tasks: open.map(taskDetail),
     board: taskBoard(rider.riderId),
   };
@@ -604,6 +624,36 @@ export function riderHistory(rider, params) {
   };
 }
 
+// Sign in / sign out for work. Saves the event, tells the partner, and runs inside a transaction.
+function recordDuty(row, online, source) {
+  const time = now();
+  db().prepare('UPDATE riders SET on_duty = ?, duty_at = ?, updated_at = ? WHERE id = ?').run(online ? 1 : 0, time, time, row.id);
+  db().prepare('INSERT INTO rider_duty_events (rider_id, partner_id, online, source, at) VALUES (?, ?, ?, ?, ?)').run(row.id, row.partner_id, online ? 1 : 0, source, time);
+  const when = new Date(time).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' });
+  notifyCourier(row.partner_id, online ? 'Rider online' : 'Rider offline',
+    `${fullName(row)} is now ${online ? 'Online / Available' : 'Offline / Unavailable'} (${when}).${online ? '' : source === 'rider' ? ' They keep any tasks they already accepted.' : source === 'logout' ? ' They logged out of the Rider Panel.' : ''}`,
+    `/courier/riders?duty=${online ? 'online' : 'offline'}`);
+}
+
+// Only the rider can change their own availability, from their own session.
+export function setRiderDuty(rider, online, source = 'rider') {
+  return transaction(() => {
+    const row = db().prepare('SELECT * FROM riders WHERE id = ?').get(rider.riderId);
+    if (!row?.active) throw new ApiError(403, 'Your account is not active.');
+    if (Boolean(row.on_duty) !== Boolean(online)) {
+      recordDuty(row, Boolean(online), source);
+      audit(riderActor(rider), online ? 'rider.signed_in' : 'rider.signed_out', 'rider', row.id, { source });
+    }
+    return riderDuty(rider.riderId);
+  });
+}
+
+export function riderDuty(riderId) {
+  const row = db().prepare('SELECT on_duty, duty_at FROM riders WHERE id = ?').get(riderId);
+  const open = db().prepare(`SELECT COUNT(*) AS c FROM rider_assignments WHERE rider_id = ? AND status IN ${OPEN}`).get(riderId).c;
+  return { online: Boolean(row?.on_duty), since: row?.duty_at || null, openTasks: open };
+}
+
 const NEEDS_REASON = 3;
 
 export function riderTaskAction(rider, id, input) {
@@ -613,6 +663,7 @@ export function riderTaskAction(rider, id, input) {
   const label = taskLabel(task.kind);
   const shipmentsLink = task.kind === 'pickup' ? '/courier/pickups' : '/courier/shipments';
   if (input.action === 'accept') {
+    if (!db().prepare('SELECT on_duty FROM riders WHERE id = ?').get(rider.riderId)?.on_duty) throw new ApiError(409, 'Sign in for work to accept new tasks.');
     return transaction(() => {
       const changed = db().prepare("UPDATE rider_assignments SET status = 'accepted', accepted_at = ?, updated_at = ? WHERE id = ? AND status = 'assigned'").run(now(), now(), task.id).changes;
       if (!changed) throw new ApiError(409, 'This task has changed. Refresh to see your latest task.');

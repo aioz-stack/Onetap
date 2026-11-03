@@ -82,7 +82,7 @@ function CourierNotifications() {
         {unread > 0 && <span className="count seller-bar__count">{unread}</span>}
       </button>
       {open && (
-        <div className="popover popover--wide seller-notices">
+        <div className="popover popover--wide seller-notices panel-pop">
           <div className="popover__head"><strong>Notifications</strong></div>
           {items.map((item) => (
             <Link className="notif" href={item.link} key={item.id} onClick={() => setOpen(false)}>

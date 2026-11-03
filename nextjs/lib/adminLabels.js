@@ -85,7 +85,8 @@ export const API_STATUS = {
   not_configured: { label: 'Not Configured', tone: 'neutral' },
 };
 
-// A rider's availability, worked out from their open task. Completed riders are free for another.
+// A rider's availability, worked out from their open task and whether they signed in for work.
+// Completed riders are free for another; a signed-out rider with no task is Offline.
 export const RIDER_STATUS = {
   available: { label: 'Available', tone: 'ok' },
   assigned: { label: 'Assigned', tone: 'warn' },
@@ -93,7 +94,15 @@ export const RIDER_STATUS = {
   in_transit: { label: 'In Transit', tone: 'info' },
   delivering: { label: 'Delivering', tone: 'info' },
   completed: { label: 'Completed', tone: 'ok' },
+  offline: { label: 'Offline', tone: 'neutral' },
   inactive: { label: 'Inactive', tone: 'neutral' },
+};
+
+// Whether a rider has signed in for work in the Rider Panel, for the partner's lists.
+export const RIDER_DUTY = {
+  online: { label: 'Online', tone: 'ok' },
+  offline: { label: 'Offline', tone: 'neutral' },
+  on_task: { label: 'Currently Assigned', tone: 'info' },
 };
 
 export const TASK_STATUS = {

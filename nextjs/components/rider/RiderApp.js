@@ -328,7 +328,7 @@ function TaskCheck({ task, status }) {
   return null;
 }
 
-function CurrentTask({ task, onChanged }) {
+function CurrentTask({ task, online, onChanged }) {
   const [busy, setBusy] = useState(false);
   const pickup = task.kind === 'pickup';
 
@@ -383,18 +383,55 @@ function CurrentTask({ task, onChanged }) {
       {task.kind === 'delivery' && <p className="muted"><strong>Sorting:</strong> <SortingStatus sorting={task.sorting} /></p>}
       {task.updates.length > 0 && <details><summary>Tracking updates ({task.updates.length})</summary><Updates updates={task.updates} /></details>}
       <div className="order-card__actions">
-        {task.actions.includes('accept') && <button className="btn btn--primary" type="button" disabled={busy} onClick={accept}>Accept Task</button>}
+        {task.actions.includes('accept') && <button className="btn btn--primary" type="button" disabled={busy || !online} onClick={accept}>Accept Task</button>}
         {task.actions.includes('decline') && <button className="btn-mini" type="button" onClick={() => Modal.open({ title: `Decline ${task.orderId}`, content: <DeclineForm task={task} onDone={onChanged} /> })}>Decline</button>}
         {Object.keys(REPORT_FORMS).filter((status) => task.actions.includes(status) && !(DISPATCH_KEYS.includes(status) && task.kind === 'delivery')).sort((a, b) => MAIN_STEPS.includes(b) - MAIN_STEPS.includes(a)).map((status) => (
           <button className={MAIN_STEPS.includes(status) ? 'btn btn--primary' : 'btn-mini'} type="button" key={status} onClick={() => report(status)}>{riderLabel(status)}</button>
         ))}
       </div>
+      {task.actions.includes('accept') && !online && <p className="muted">You are offline. Sign in at the top to accept this task, or decline it.</p>}
       {task.status === 'accepted' && !task.sandbox && <p className="muted">{task.courier} records collection and delivery in its own system, so update the parcel there.</p>}
       {task.status === 'accepted' && pickup && task.actions.length === 0 && task.sandbox && <p className="muted">Waiting for your courier to confirm this pickup.</p>}
       {task.status === 'accepted' && !pickup && task.sandbox && !['ready_for_delivery', 'out_for_delivery'].includes(task.shipmentStatus) && <DispatchChecklist task={task} onReport={report} />}
       {task.status === 'accepted' && task.shipmentStatus === 'ready_for_delivery' && <p className="muted">Ready for delivery. Click Out for Delivery when you set off, and the customer is told.</p>}
       {task.status === 'accepted' && task.shipmentStatus === 'out_for_delivery' && <p className="muted">On its way. Click Order Delivered at the door, with a photo and who received it.</p>}
     </section>
+  );
+}
+
+// Sign in / sign out for work. Only a signed-in (online) rider is given or can accept new tasks;
+// tasks already accepted stay on My Tasks either way. Checked every 15 seconds, so a change made in
+// another tab, or by logging out there, shows here too.
+function DutyToggle() {
+  const [duty, setDuty] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => riderFetch('/duty').then(setDuty, () => {}), []);
+  useRefresh(load);
+
+  async function change() {
+    const online = !duty.online;
+    setBusy(true);
+    try {
+      const next = await postRider('/duty', { online });
+      setDuty(next);
+      toast(online ? 'You are online. New tasks can be given to you.' : next.openTasks ? 'You are offline. Finish the tasks you already have; no new ones will come.' : 'You are offline. No new tasks will be given to you.', 'success');
+      window.dispatchEvent(new Event(TASKS_CHANGED));
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+    setBusy(false);
+  }
+
+  if (!duty) return null;
+  return (
+    <button className="duty-toggle" type="button" role="switch" aria-checked={duty.online} disabled={busy} onClick={change}
+      title={duty.online ? `Online since ${dateTime(duty.since)}. Click to sign out.` : 'Offline. Click to sign in for work.'}>
+      <span className="duty-toggle__track" aria-hidden="true"><span /></span>
+      <span className="duty-toggle__text">
+        <strong>{duty.online ? 'Online' : 'Offline'}</strong>
+        <small>{duty.online ? 'Sign Out' : 'Sign In'}</small>
+      </span>
+    </button>
   );
 }
 
@@ -423,6 +460,7 @@ export function RiderShell({ account, children }) {
         </Link>
         <span className="seller-bar__title">Rider Panel</span>
         <div className="seller-bar__actions">
+          <DutyToggle />
           <ThemeToggle />
           <TaskHistory open={panel === 'history'} close={close} toggleProps={toggleProps} />
           <RiderNotifications open={panel === 'notices'} close={close} toggleProps={toggleProps} />
@@ -530,7 +568,7 @@ function TaskBoard({ data, onChanged }) {
         ))}
       </div>
       <p className="muted">{text}</p>
-      {[...cards.map((row) => open[row.taskId]), ...unplaced].map((task) => <CurrentTask task={task} onChanged={onChanged} key={task.id} />)}
+      {[...cards.map((row) => open[row.taskId]), ...unplaced].map((task) => <CurrentTask task={task} online={data.rider.online} onChanged={onChanged} key={task.id} />)}
       {(others.length > 0 || !cards.length) && (
         <section className="panel">
           <div className="panel__head"><h2>{cards.length ? `Also in ${label}` : label}</h2></div>
@@ -560,6 +598,7 @@ export function RiderHome() {
       <RiderHead title="My Tasks" text={data ? `${count(data.rider.completedPickups, 'pickup')} and ${count(data.rider.completedDeliveries, 'delivery', 'deliveries')} completed. Past tasks are under Task History at the top.` : 'Updates every 15 seconds.'}>{data && <Badge status={RIDER_STATUS[data.rider.status]} />}</RiderHead>
       {loading && <div className="skeleton" role="status" aria-label="Loading your tasks" />}
       {error && !data && <p className="form-error" role="alert">{error}</p>}
+      {data && !data.rider.online && <p className="admin-banner" role="note"><strong>You are offline.</strong> No new tasks will be given to you. Tasks you already accepted stay here. Sign in at the top when you are ready to work.</p>}
       {data && <TaskBoard data={data} onChanged={load} />}
     </>
   );

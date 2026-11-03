@@ -7,13 +7,15 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { courierFetch, COURIER_CLIENT, dateTime, DataTable, DateFilter, FilterBar, PageHead, percent, postCourier, SelectFilter, StatCards, Tabs, TextField, useAdminList, useRefresh, Badge } from '../admin/AdminUI';
-import { options, RIDER_REMITTANCE_STATUS, RIDER_STATUS, TASK_KIND, TASK_STATUS } from '@/lib/adminLabels';
+import { options, RIDER_DUTY, RIDER_REMITTANCE_STATUS, RIDER_STATUS, TASK_KIND, TASK_STATUS } from '@/lib/adminLabels';
 import { Modal, peso, toast } from '@/lib/ui';
 
 const LICENSE_TYPES = 'image/jpeg,image/png,image/webp,application/pdf';
 const MAX_LICENSE_BYTES = 10 * 1024 * 1024;
 
 const licenseUrl = (id) => `/api/courier/riders/${id}/license`;
+// Why a rider went offline, when it wasn't their own switch.
+const DUTY_SOURCE = { logout: 'logged out', deactivated: 'deactivated by your team' };
 
 function LicensePreview({ src, mime, name }) {
   if (!src) return null;
@@ -193,6 +195,7 @@ function RiderDetail({ id, onChanged }) {
     <div className="assistant-form">
       <dl className="order-facts order-facts--row">
         <div><dt>Status</dt><dd><Badge status={RIDER_STATUS[rider.status]} /></dd></div>
+        <div><dt>Signed in</dt><dd>{rider.online ? 'Online' : 'Offline'}{rider.dutyAt && `, since ${dateTime(rider.dutyAt)}`}</dd></div>
         <div><dt>Contact number</dt><dd><a className="link" href={`tel:${rider.phone}`}>{rider.phone}</a></dd></div>
         <div><dt>Rider Panel username</dt><dd>{rider.username}{!rider.hasLogin && ' (no password yet)'}</dd></div>
         <div><dt>Current assignment</dt><dd>{rider.current ? `${TASK_KIND[rider.current.kind]} ${rider.current.orderId} (${TASK_STATUS[rider.current.status].label})` : 'None'}</dd></div>
@@ -216,6 +219,14 @@ function RiderDetail({ id, onChanged }) {
         <h3>Assignment history</h3>
         <TaskList tasks={rider.history} />
       </section>
+      <section>
+        <h3>Sign-in log</h3>
+        {rider.duty.length ? (
+          <ol className="timeline order-timeline">
+            {rider.duty.map((event) => <li className="is-done" key={event.at}>{event.online ? 'Signed in, Online' : 'Signed out, Offline'}<small>{dateTime(event.at)}{DUTY_SOURCE[event.source] && ` · ${DUTY_SOURCE[event.source]}`}</small></li>)}
+          </ol>
+        ) : <p className="muted">Not signed in yet.</p>}
+      </section>
     </div>
   );
 }
@@ -227,6 +238,7 @@ export function CourierRiders({ initial }) {
   useRefresh(list.reload);
   const counts = list.data?.counts || {};
   const metrics = list.data?.metrics;
+  const dutyCounts = list.data?.dutyCounts || {};
 
   const add = () => Modal.open({
     title: 'Add rider',
@@ -245,6 +257,8 @@ export function CourierRiders({ initial }) {
         <section className="panel">
           <StatCards items={[
             { label: 'Total Registered Riders', value: metrics.total },
+            { label: 'Online Riders', value: metrics.online, href: '/courier/riders?duty=online' },
+            { label: 'Offline Riders', value: metrics.offline, href: '/courier/riders?duty=offline' },
             { label: 'Available Riders', value: metrics.available },
             { label: 'Assigned Riders', value: metrics.assigned },
             { label: 'Pending Pickups', value: metrics.pendingPickups, href: '/courier/pickups' },
@@ -256,7 +270,9 @@ export function CourierRiders({ initial }) {
         </section>
       )}
       <Tabs list={list} name="status" label="Filter by status" tabs={[['', 'All Riders'], ...options(RIDER_STATUS).map(([value, label]) => [value, label, counts[value] || 0])]} />
-      <FilterBar list={list} placeholder="Rider name, username or contact number" />
+      <FilterBar list={list} placeholder="Rider name, username or contact number">
+        <SelectFilter list={list} name="duty" label="Sign-in status" options={options(RIDER_DUTY).map(([value, label]) => [value, `${label} (${dutyCounts[value] || 0})`])} />
+      </FilterBar>
       <DataTable
         list={list}
         label="Riders"
@@ -266,6 +282,7 @@ export function CourierRiders({ initial }) {
           { label: 'Rider Name', render: (row) => <button className="link" type="button" onClick={() => openRider(row.id, list.reload)}>{row.name}</button> },
           { label: 'Contact Number', render: (row) => row.phone },
           { label: "Driver's License", render: (row) => <a className="link" href={licenseUrl(row.id)} target="_blank" rel="noopener noreferrer">View</a> },
+          { label: 'Signed In', render: (row) => (row.active ? <>{row.online ? 'Online' : 'Offline'}{row.dutyAt && <small className="admin-cell-note">since {dateTime(row.dutyAt)}</small>}</> : '—') },
           { label: 'Availability', render: (row) => <Badge status={RIDER_STATUS[row.status]} /> },
           { label: 'Current Assignment', render: (row) => (row.current ? <>{TASK_KIND[row.current.kind]} {row.current.orderId}<small className="admin-cell-note">{row.openTasks > 1 ? `${row.openTasks} open orders` : TASK_STATUS[row.current.status].label}</small></> : '—') },
           { label: 'Completed Deliveries', render: (row) => row.completedDeliveries },
@@ -417,7 +434,7 @@ export function RiderSection({ shipment, onChanged }) {
                     <span className="sr-only">{`Choose a ${label.toLowerCase()}`}</span>
                     <select value={choice[kind]} onChange={(e) => setChoice({ ...choice, [kind]: e.target.value })}>
                       <option value="">Choose a rider</option>
-                      {assign.riders.map((rider) => <option key={rider.id} value={rider.id}>{rider.name} ({rider.phone}){rider.openTasks ? `, ${rider.openTasks} open` : ', free'}</option>)}
+                      {assign.riders.map((rider) => <option key={rider.id} value={rider.id} disabled={!rider.online}>{rider.name} ({rider.phone}){rider.online ? (rider.openTasks ? `, ${rider.openTasks} open` : ', free') : ', offline'}</option>)}
                     </select>
                   </label>
                   <button className="btn-mini btn-mini--primary" type="button" disabled={busy || !choice[kind]} onClick={() => act({ action: 'assignRider', kind, riderId: choice[kind] }, open ? 'Rider changed. Both riders were notified.' : 'Rider assigned and notified.')}>
@@ -426,6 +443,7 @@ export function RiderSection({ shipment, onChanged }) {
                 </div>
               ) : <p className="muted">No active rider. <Link className="link" href="/courier/riders">Register or activate a rider</Link> first.</p>
             )}
+            {assign[kind] && assign.riders.length > 0 && !assign.riders.some((rider) => rider.online) && <p className="muted">All your riders are offline. A rider must sign in to the Rider Panel before you can assign them.</p>}
             {kind === 'pickup' && assign.pickup && shipment.pickup?.status === 'scheduled' && <p className="muted">Assigning a rider also approves this pickup.</p>}
             {open && <button className="btn-mini" type="button" disabled={busy} onClick={() => act({ action: 'removeRider', kind }, 'Rider removed and notified.')}>Remove Rider</button>}
           </div>

@@ -505,6 +505,20 @@ export function getDb() {
   // Riders first signed in with their mobile number, held in username. They now have their own
   // username, so the number moves to phone, and an existing rider keeps signing in with it.
   addColumns(database, 'riders', { phone: "TEXT NOT NULL DEFAULT ''" });
+  // Whether a rider has signed in for work in the Rider Panel. Only online riders get new tasks.
+  // Every sign-in and sign-out is kept in rider_duty_events.
+  addColumns(database, 'riders', { on_duty: 'INTEGER NOT NULL DEFAULT 0', duty_at: 'INTEGER' });
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS rider_duty_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      rider_id TEXT NOT NULL,
+      partner_id TEXT NOT NULL,
+      online INTEGER NOT NULL,
+      source TEXT NOT NULL,
+      at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS rider_duty_events_rider ON rider_duty_events (rider_id, id);
+  `);
   // A new task's notice keeps the order, customer, pickup location and assignment time as JSON.
   addColumns(database, 'rider_notifications', { details: "TEXT NOT NULL DEFAULT ''" });
   // The rider who collected a COD parcel's cash, and the remittance they handed it over in.
