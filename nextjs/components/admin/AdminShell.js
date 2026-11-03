@@ -92,7 +92,7 @@ export function AdminShell({ admin, children }) {
       <div className="seller-shell">
         <nav className={`seller-nav ${navOpen ? 'is-open' : ''}`} id="admin-nav" aria-label="Admin Console">
           {NAV.filter((item) => !item.permission || can(admin, item.permission)).map((item) => (
-            <Link className="seller-nav__home" href={item.href} key={item.href} aria-current={pathname === item.href ? 'page' : undefined}><Icon name={item.icon} /> {item.label}<NavCount count={counts[item.href]} /></Link>
+            <Link className="seller-nav__home" href={item.href} key={item.href} aria-current={pathname === item.href || (item.href !== '/admin' && pathname.startsWith(`${item.href}/`)) ? 'page' : undefined}><Icon name={item.icon} /> {item.label}<NavCount count={counts[item.href]} /></Link>
           ))}
         </nav>
         {children}

@@ -19,7 +19,8 @@ const money = (value) => Math.round(value * 100) / 100;
 export function recordCollection(order, shipment, at) {
   const productTotal = money(order.subtotal ?? order.items.reduce((sum, item) => sum + item.price * item.qty, 0));
   const riderFee = money(order.shippingFee || 0);
-  const fees = feesFor(productTotal, riderFee);
+  // The seller's and partner's own rates if they have them (fees.js), as they stand right now.
+  const fees = feesFor(productTotal, riderFee, { seller: order.seller, partnerId: shipment.partner_id });
   const cod = order.payment === COD;
   const collected = cod
     ? db().prepare('SELECT collected FROM cod_records WHERE order_id = ?').get(order.id)?.collected ?? order.total
@@ -27,11 +28,11 @@ export function recordCollection(order, shipment, at) {
   const rider = db().prepare("SELECT rider_id FROM rider_assignments WHERE shipment_id = ? AND kind = 'delivery' AND status = 'completed' ORDER BY finished_at DESC LIMIT 1").get(shipment.id);
   db().prepare(`
     INSERT OR IGNORE INTO collection_records (order_id, seller, shop_name, customer, customer_name, partner_id, partner_name, rider_id, payment_method, product_total, rider_fee, commission_rate, admin_fee, seller_proceeds, total, collected, payment_reference, collected_at, created_at,
-      admin_fee_type, admin_fee_value, logistics_fee, logistics_fee_type, logistics_fee_value, courier_share)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      admin_fee_type, admin_fee_value, logistics_fee, logistics_fee_type, logistics_fee_value, courier_share, admin_fee_source, logistics_fee_source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(order.id, order.seller, order.shopName, order.customer, order.buyer.name, shipment.partner_id, shipment.partner_name, rider?.rider_id || '', order.payment,
     productTotal, riderFee, fees.adminFeeType === 'percent' ? fees.adminFeeValue : 0, fees.adminFee, fees.sellerProceeds, money(order.total), money(collected), cod ? '' : order.paymentReference || '', at, Date.now(),
-    fees.adminFeeType, fees.adminFeeValue, fees.logisticsFee, fees.logisticsFeeType, fees.logisticsFeeValue, fees.courierShare);
+    fees.adminFeeType, fees.adminFeeValue, fees.logisticsFee, fees.logisticsFeeType, fees.logisticsFeeValue, fees.courierShare, fees.adminFeeSource, fees.logisticsFeeSource);
 }
 
 // Delivered orders from before this existed, recorded with today's commission rate.
@@ -61,7 +62,7 @@ const COLLECTION_LIST = {
 const toCollection = (row) => ({
   orderId: row.order_id, seller: row.shop_name, customer: row.customer_name, courier: row.partner_name, rider: row.first_name ? [row.first_name, row.middle_name, row.last_name].filter(Boolean).join(' ') : '',
   paymentMethod: row.payment_method, productTotal: row.product_total, riderFee: row.rider_fee, adminFee: row.admin_fee, commissionRate: row.commission_rate,
-  adminFeeType: row.admin_fee_type, adminFeeValue: row.admin_fee_value, logisticsFee: row.logistics_fee, logisticsFeeType: row.logistics_fee_type, logisticsFeeValue: row.logistics_fee_value, courierShare: row.courier_share, sellerProceeds: row.seller_proceeds,
+  adminFeeType: row.admin_fee_type, adminFeeValue: row.admin_fee_value, logisticsFee: row.logistics_fee, logisticsFeeType: row.logistics_fee_type, logisticsFeeValue: row.logistics_fee_value, courierShare: row.courier_share, sellerProceeds: row.seller_proceeds, adminFeeSource: row.admin_fee_source, logisticsFeeSource: row.logistics_fee_source,
   total: row.total, collected: row.collected, difference: money(row.collected - row.total), paymentReference: row.payment_reference, collectedAt: row.collected_at, status: row.collection_status,
 });
 

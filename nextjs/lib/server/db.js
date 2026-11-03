@@ -654,6 +654,38 @@ export function getDb() {
   });
   database.exec("UPDATE collection_records SET admin_fee_type = 'percent', admin_fee_value = commission_rate WHERE admin_fee_type = ''");
   database.exec('UPDATE collection_records SET courier_share = rider_fee - logistics_fee WHERE courier_share IS NULL');
+  // Where each order's fees came from: the default rate, the seller's or partner's own rate
+  // ('account'), or none because the fee was switched off for them ('off').
+  addColumns(database, 'collection_records', { admin_fee_source: "TEXT NOT NULL DEFAULT 'default'", logistics_fee_source: "TEXT NOT NULL DEFAULT 'default'" });
+  // Per-account fees (fees.js): a seller's admin fee or a logistics partner's logistics fee. With no
+  // row, or `custom` 0, the account pays the default rate; `enabled` 0 switches the fee off for it.
+  // fee_changes keeps every change to a default or account fee, and who made it.
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS account_fees (
+      kind TEXT NOT NULL,
+      account TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      custom INTEGER NOT NULL DEFAULT 0,
+      type TEXT NOT NULL DEFAULT 'percent',
+      value REAL NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      created_by TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      updated_by TEXT NOT NULL,
+      PRIMARY KEY (kind, account)
+    );
+    CREATE TABLE IF NOT EXISTS fee_changes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      account TEXT NOT NULL DEFAULT '',
+      before TEXT NOT NULL,
+      after TEXT NOT NULL,
+      admin TEXT NOT NULL,
+      admin_role TEXT NOT NULL,
+      at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS fee_changes_account ON fee_changes (kind, account, id);
+  `);
   // Notices for administrators. Each is for one permission, and each administrator's read
   // position is the newest id they have seen.
   database.exec(`

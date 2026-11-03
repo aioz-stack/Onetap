@@ -1219,6 +1219,15 @@ button.topnav__item:hover, a.topnav__item:hover, .topnav__follow a:hover { color
 .fee-type input { accent-color: var(--primary); }
 .fee-editor__value { display: flex; align-items: center; gap: 8px; max-width: 240px; }
 .fee-editor__value input { flex: 1; min-width: 0; font-variant-numeric: tabular-nums; }
+/* Fee Management's three pages, and one account's fee. */
+.fee-tabs { margin-bottom: 4px; }
+.fee-tabs a { flex: 1 0 auto; padding: 7px 12px; border-radius: 9px; color: var(--muted); font-size: 14px; font-weight: 600; text-align: center; white-space: nowrap; text-decoration: none; }
+.fee-tabs a:hover { color: var(--text); }
+.fee-tabs a[aria-current="page"] { background: var(--surface); color: var(--link); box-shadow: var(--shadow); }
+.account-fee__form { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.account-fee__form fieldset:disabled { opacity: .55; }
+.account-fee__rate { display: flex; flex-direction: column; gap: 10px; }
+.account-fee__example, .account-fee__note { margin: 0; font-size: 13px; }
 .fee-editor__value span { color: var(--muted); font-weight: 700; }
 .fee-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .fee-example__inputs { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
