@@ -127,7 +127,7 @@ function SellerRegister() {
           toast('Application submitted. We will review it soon.', 'success');
         }}
       >
-        <Sections schema={SELLER_SCHEMA} prefix="seller" />
+        <Sections schema={SELLER_SCHEMA} prefix="seller" panel="seller" />
         <p className="form-error" role="alert" />
         <button className="btn btn--primary btn--block" type="submit">Submit Application</button>
       </Form>

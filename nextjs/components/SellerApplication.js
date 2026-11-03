@@ -42,7 +42,7 @@ function ResubmitForm({ application, onSaved }) {
         }
       }}
     >
-      <Sections schema={applicationSchema(application.profile)} prefix="resubmit" />
+      <Sections schema={applicationSchema(application.profile)} prefix="resubmit" panel="seller" />
       <p className="form-error" role="alert" />
       <button className="btn btn--primary btn--block" type="submit">Resubmit Application</button>
     </Form>

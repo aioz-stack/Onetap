@@ -1,6 +1,7 @@
 // Form schemas. The two registration flows are built from the same sections,
 // so a field change here reaches both.
 
+import { addressSection } from './address';
 import { SERVICE_AREA, SHIPPING_ZONES } from './data';
 
 const SUFFIXES = ['', 'Jr.', 'Sr.', 'II', 'III', 'IV', 'V'];
@@ -61,30 +62,15 @@ const DOCUMENTS_SECTION = {
   ],
 };
 
-function addressSection(legend, cityLabel) {
-  return {
-    legend,
-    fields: [
-      { name: 'street', label: 'Street', autocomplete: 'address-line1', wide: true },
-      { name: 'barangay', label: 'Barangay', autocomplete: 'address-line2' },
-      { name: 'city', label: cityLabel, autocomplete: 'address-level2' },
-      { name: 'province', label: 'Province', autocomplete: 'address-level1', placeholder: 'e.g., Cagayan' },
-      { name: 'country', label: 'Country', autocomplete: 'country-name', value: 'Philippines' },
-      { name: 'zip', label: 'Zip Code', autocomplete: 'postal-code', pattern: '[A-Za-z0-9 \\-]{4,10}', placeholder: '3500' },
-    ],
-  };
-}
-
-export const SELLER_SCHEMA = [ACCOUNT_SECTION, STORE_SECTION, businessSection(), PERSONAL_SECTION, addressSection('Address', 'City / Municipality'), DOCUMENTS_SECTION];
+export const SELLER_SCHEMA = [ACCOUNT_SECTION, STORE_SECTION, businessSection(), PERSONAL_SECTION, addressSection('Store Address'), DOCUMENTS_SECTION];
 
 // What an applicant can change when resubmitting. Saved values fill the form, and documents
 // are only replaced if a new file is chosen.
 export function applicationSchema(seller) {
-  const address = addressSection('Address', 'City / Municipality');
   return [
     { legend: 'Store Details', fields: [{ ...STORE_SECTION.fields[0], value: seller?.shopName }, { ...ACCOUNT_SECTION.fields[3], value: seller?.contact }] },
     businessSection(seller),
-    { ...address, fields: address.fields.map((field) => ({ ...field, value: seller?.[field.name] ?? field.value })) },
+    addressSection('Store Address', seller),
     { legend: 'Replace Documents', fields: DOCUMENTS_SECTION.fields.map((field) => ({ ...field, optional: true, hint: 'Leave empty to keep your current file.' })) },
   ];
 }
@@ -96,7 +82,7 @@ export const VALID_ID = { name: 'validId', label: 'Valid ID', type: 'file', acce
 
 const IDENTITY_SECTION = { legend: 'Identity Verification', fields: [VALID_ID, { ...ID_NUMBER, wide: true }] };
 
-export const CUSTOMER_SCHEMA = [CUSTOMER_ACCOUNT_SECTION, PERSONAL_SECTION, addressSection('Complete Address', 'City / Municipality'), IDENTITY_SECTION];
+export const CUSTOMER_SCHEMA = [CUSTOMER_ACCOUNT_SECTION, PERSONAL_SECTION, addressSection('Complete Address'), IDENTITY_SECTION];
 
 // A rejected customer applies again with a new photo of their ID and its number.
 export const CUSTOMER_RESUBMIT_SCHEMA = [{ fields: [VALID_ID, { ...ID_NUMBER, wide: true }] }];
@@ -106,10 +92,10 @@ export const CUSTOMER_RESUBMIT_SCHEMA = [{ fields: [VALID_ID, { ...ID_NUMBER, wi
 export const CUSTOMER_PROFILE_SECTIONS = [
   { legend: 'Contact', fields: [ACCOUNT_SECTION.fields[2], { ...MOBILE_FIELD, purpose: 'profile', hint: 'A Philippine mobile number. A new number needs a 6-digit code texted to it.' }] },
   PERSONAL_SECTION,
-  addressSection('Complete Address', 'City / Municipality'),
+  addressSection('Complete Address'),
 ];
 
-export const customerProfileSchema = (account) => CUSTOMER_PROFILE_SECTIONS.map((section) => ({
+export const customerProfileSchema = (account) => CUSTOMER_PROFILE_SECTIONS.map((section) => (section.address ? addressSection(section.legend, account.profile) : {
   ...section,
   fields: section.fields.map((field) => ({ ...field, value: (field.name === 'email' ? account.email : account.profile[field.name]) ?? field.value })),
 }));
@@ -211,20 +197,19 @@ export const TRACK_SCHEMA = [{
   fields: [{ name: 'order', label: 'Order Number', placeholder: 'OT-1A2B3C4D', hint: 'You can find it in My Purchases.', wide: true }],
 }];
 
-// Filled from the customer's profile, and editable for each order.
+// Filled from the customer's profile, and editable for each order. The address is the standard one,
+// so an older free-text address has to be chosen again here.
 export function checkoutSchema(customer) {
-  return [{
-    legend: 'Delivery Address',
-    fields: [
-      { name: 'name', label: 'Full Name', autocomplete: 'name', maxlength: 100, value: customer && `${customer.firstName} ${customer.lastName}`, wide: true },
-      { name: 'contact', label: 'Contact Number', type: 'tel', autocomplete: 'tel', pattern: '\\+?[0-9][0-9 \\-]{9,15}', hint: '10 to 16 digits.', value: customer?.contact, wide: true },
-      { name: 'street', label: 'Street', autocomplete: 'address-line1', maxlength: 150, value: customer?.street, wide: true },
-      { name: 'barangay', label: 'Barangay', autocomplete: 'address-line2', maxlength: 100, value: customer?.barangay },
-      { name: 'city', label: 'City', autocomplete: 'address-level2', maxlength: 100, hint: `We deliver within ${SERVICE_AREA.city} only.`, value: customer?.city },
-      { name: 'province', label: 'Province', autocomplete: 'address-level1', maxlength: 100, value: customer?.province },
-      { name: 'zip', label: 'Zip Code', autocomplete: 'postal-code', pattern: '[A-Za-z0-9 \\-]{4,10}', value: customer?.zip },
-    ],
-  }];
+  return [
+    {
+      legend: 'Recipient',
+      fields: [
+        { name: 'name', label: 'Full Name', autocomplete: 'name', maxlength: 100, value: customer && `${customer.firstName} ${customer.lastName}`, wide: true },
+        { name: 'contact', label: 'Contact Number', type: 'tel', autocomplete: 'tel', pattern: '\\+?[0-9][0-9 \\-]{9,15}', hint: '10 to 16 digits.', value: customer?.contact, wide: true },
+      ],
+    },
+    addressSection('Delivery Address', customer),
+  ];
 }
 
 const plainText = (value) => String(value ?? '').trim().toLowerCase().replace(/[.,]/g, '').replace(/\s+/g, ' ');

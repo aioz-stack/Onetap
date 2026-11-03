@@ -135,14 +135,33 @@ function ResubmitForm() {
 }
 
 // Tells a customer who isn't Verified what's happening, on every store page.
+// Older free-text addresses, and streets taken off the list, are chosen again in the standard format.
+function AddressBanner({ pathname }) {
+  return (
+    <div className="approval-banner" role="status">
+      <div className="container approval-banner__row">
+        <Icon name="pin" />
+        <p>
+          <strong>Update your address.</strong> Onetap now uses Tuguegarao&apos;s official barangays and street list, so riders can find you.
+          {pathname !== '/profile' && <> <Link className="link" href="/profile#profile-barangay">Choose your barangay and street in My Profile</Link></>}
+          {pathname === '/profile' && ' Choose them under Complete Address below.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function CustomerApprovalBanner() {
   const pathname = usePathname();
   const customer = useStored('session.customer');
   const status = customer?.approvalStatus;
-  if (!customer || !status || status === 'approved' || isSellerApp(pathname)) return null;
+  if (!customer || isSellerApp(pathname)) return null;
+  const address = customer.addressCurrent === false ? <AddressBanner pathname={pathname} /> : null;
+  if (!status || status === 'approved') return address;
   const rejected = status === 'rejected';
   const again = customer.verifiedBefore;
   return (
+    <>
     <div className={`approval-banner${rejected ? ' approval-banner--rejected' : ''}`} role="status">
       <div className="container approval-banner__row">
         <Icon name={rejected ? 'shield' : 'clock'} />
@@ -155,6 +174,8 @@ export function CustomerApprovalBanner() {
         {rejected && <button className="btn btn--primary" type="button" onClick={() => Modal.open({ title: 'Resubmit your valid ID', content: <ResubmitForm /> })}>Resubmit Valid ID</button>}
       </div>
     </div>
+    {address}
+    </>
   );
 }
 

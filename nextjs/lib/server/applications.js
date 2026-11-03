@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { applicationSchema } from '../schemas';
+import { addressErrors, standardAddress } from './streets';
 import { audit } from './admin';
 import { registerAccount } from './auth';
 import { getDb, UPLOAD_DIR } from './db';
@@ -126,7 +127,11 @@ export async function resubmitApplication(seller, request) {
     else if (value && field.pattern && !new RegExp(`^(?:${field.pattern})$`).test(value)) errors[field.name] = field.hint || `Enter a valid ${field.label.toLowerCase()}.`;
     updates[field.name] = value;
   });
+  Object.entries(addressErrors(updates)).forEach(([name, message]) => {
+    errors[name] ||= message;
+  });
   if (Object.keys(errors).length) throw new ApiError(422, 'Check the highlighted fields.', errors);
+  Object.assign(updates, standardAddress(updates));
   const files = await readDocuments(form, { required: false });
   const db = getDb();
   const permit = db.prepare("SELECT 1 FROM seller_documents WHERE seller = ? AND kind = 'businessPermit' AND current = 1").get(seller);

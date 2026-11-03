@@ -123,8 +123,10 @@ function renameInRecords(id, from, name) {
 }
 
 export function updatePartner(admin, id, input) {
-  const { name: previous } = loadPartner(id);
-  const { name, data } = cleanPartner(input);
+  const { name: previous, hubAddress } = loadPartner(id);
+  const { name, data: fields } = cleanPartner(input);
+  // The hub address belongs to the partner's Company Profile, so an admin edit keeps it.
+  const data = hubAddress ? { ...fields, hubAddress } : fields;
   const db = getDb();
   if (db.prepare('SELECT 1 FROM logistics_partners WHERE name = ? AND id <> ?').get(name, id)) throw new ApiError(409, 'That partner already exists.', { name: 'That partner already exists.' });
   return transaction(() => {

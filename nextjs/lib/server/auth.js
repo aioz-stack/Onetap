@@ -8,6 +8,7 @@ import { verificationOf } from '../adminLabels';
 import { CUSTOMER_SCHEMA, SELLER_SCHEMA } from '../schemas';
 import { getDb } from './db';
 import { ApiError } from './errors';
+import { addressErrors, checkedAddress, isCurrentAddress, standardAddress } from './streets';
 
 const scryptAsync = promisify(scrypt);
 
@@ -60,8 +61,17 @@ function validateAccount(schema, data) {
       errors[field.name] = 'Enter a valid email address.';
     }
   });
+  // The standard address: a listed barangay, and a street in that barangay's list (streets.js).
+  if (fields(schema).some((field) => field.type === 'street')) {
+    Object.entries(addressErrors(data)).forEach(([name, message]) => {
+      errors[name] ||= message;
+    });
+  }
   if (Object.keys(errors).length) throw new ApiError(422, 'Check the highlighted fields.', errors);
 }
+
+const fields = (schema) => schema.flatMap((section) => section.fields);
+export const hasAddress = (schemaFields) => schemaFields.some((field) => field.type === 'street');
 
 // Anything without a stored decision counts as not approved.
 function applicationStatus(username) {
@@ -78,8 +88,10 @@ function customerApproval(username) {
 
 function toAccount(role, row) {
   const account = { ...JSON.parse(row.profile), username: row.username, email: row.email, role, createdAt: row.created_at };
-  if (role === 'seller') return { ...account, applicationStatus: applicationStatus(row.username) };
-  if (role === 'customer') return { ...account, ...customerApproval(row.username) };
+  // addressCurrent is false for an older free-text address, or a street no longer on the list, so the
+  // panels ask for it again.
+  if (role === 'seller') return { ...account, applicationStatus: applicationStatus(row.username), addressCurrent: isCurrentAddress(account) };
+  if (role === 'customer') return { ...account, ...customerApproval(row.username), addressCurrent: isCurrentAddress(account) };
   return account;
 }
 
@@ -221,6 +233,7 @@ export async function registerAccount(role, request, input, alongside) {
       .filter(({ name, type, private: hidden }) => !['username', 'email', 'password'].includes(name) && type !== 'file' && !hidden)
       .map(({ name }) => [name, String(rest[name] ?? '').trim()]),
   );
+  if (hasAddress(fields(schema))) Object.assign(profile, standardAddress(rest));
   const hash = await hashPassword(password);
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -283,4 +296,15 @@ export async function logoutAccount(role) {
   const token = store.get(cookie)?.value;
   if (token) getDb().prepare(`DELETE FROM ${sessions} WHERE token_hash = ?`).run(tokenHash(token));
   store.delete(cookie);
+}
+
+// Saves a seller's or customer's address on its own, in the standard format. Sellers fix theirs
+// from Seller Centre this way; customers change theirs in My Profile with the rest of their details.
+export function saveAddress(role, username, input) {
+  const { table } = ROLES[role];
+  const row = getDb().prepare(`SELECT * FROM ${table} WHERE username = ?`).get(username);
+  if (!row) throw new ApiError(404, 'We could not find that account.');
+  const profile = { ...JSON.parse(row.profile), ...checkedAddress(input) };
+  getDb().prepare(`UPDATE ${table} SET profile = ? WHERE username = ?`).run(JSON.stringify(profile), username);
+  return toAccount(role, getDb().prepare(`SELECT * FROM ${table} WHERE username = ?`).get(username));
 }

@@ -8,6 +8,7 @@ import { applicationCounts } from './applications';
 import { customerApprovalCounts } from './customerApprovals';
 import { getDb } from './db';
 import { flaggedListings } from './moderation';
+import { streetRequestCounts } from './streets';
 
 const db = () => getDb();
 const count = (sql, ...args) => db().prepare(sql).get(...args).c;
@@ -21,6 +22,7 @@ function only(counts) {
 export function adminNavCounts(admin) {
   const now = Date.now();
   const counts = {};
+  if (can(admin, 'logistics')) counts['/admin/streets'] = streetRequestCounts().pending;
   if (can(admin, 'pickups')) counts['/admin/pickups'] = count("SELECT COUNT(*) AS c FROM pickups WHERE status = 'pending' OR status = 'failed' OR (status = 'approved' AND booking_error <> '')");
   if (can(admin, 'shipments')) counts['/admin/shipments'] = count("SELECT COUNT(*) AS c FROM shipments WHERE status = 'failed_delivery' OR (status = 'pending' AND last_error <> '') OR investigating = 1");
   if (can(admin, 'cod')) {

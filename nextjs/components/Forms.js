@@ -4,6 +4,7 @@
 // field's rules live in its schema attributes.
 
 import { useEffect, useRef, useState } from 'react';
+import AddressFields from './AddressFields';
 import Icon from './Icon';
 import MobileOtpField from './MobileOtpField';
 import { toast } from '@/lib/ui';
@@ -71,9 +72,12 @@ function Field({ field, prefix }) {
   );
 }
 
-export function Sections({ schema, prefix }) {
+// `panel` ('customer', 'seller' or 'courier') credits missing-street reports from an address section.
+export function Sections({ schema, prefix, panel }) {
   return schema.map((section, i) => {
-    const fields = section.fields.map((f) => <Field key={f.name} field={f} prefix={prefix} />);
+    const fields = section.address
+      ? <AddressFields fields={section.fields} prefix={prefix} panel={panel} />
+      : section.fields.map((f) => <Field key={f.name} field={f} prefix={prefix} />);
     if (!section.legend) return <div className="form-grid" key={i}>{fields}</div>;
     return (
       <fieldset className="form-section" key={section.legend}>

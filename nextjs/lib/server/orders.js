@@ -4,6 +4,8 @@
 import { randomBytes } from 'node:crypto';
 import { checkoutQuote, findSaleRow, salePrice, withStockChange } from '../products';
 import { checkoutLines, removeOrdered } from './cart';
+import { addressErrors, standardAddress } from './streets';
+import { CITY, formatAddress } from '../address';
 import { createCodRecord, voidCodRecord } from './cod';
 import { logisticsOptions } from './logistics';
 import { audit } from './admin';
@@ -82,11 +84,16 @@ export function listCustomerOrders(customer) {
 function checkAddress(address) {
   if (typeof address !== 'object' || address === null) throw new ApiError(400, 'That request could not be read.');
   const errors = {};
-  checkoutSchema()[0].fields.forEach((field) => {
+  checkoutSchema().flatMap((section) => section.fields).forEach((field) => {
     const value = typeof address[field.name] === 'string' ? address[field.name].trim() : '';
-    if (!value) errors[field.name] = `${field.label} is required.`;
-    else if (value.length > (field.maxlength || 100)) errors[field.name] = 'That is too long.';
+    if (!value) {
+      if (!field.optional) errors[field.name] = `${field.label} is required.`;
+    } else if (value.length > (field.maxlength || 100)) errors[field.name] = 'That is too long.';
+    else if (field.options && !field.options.includes(value)) errors[field.name] = `Choose a valid ${field.label.toLowerCase()}.`;
     else if (field.pattern && !new RegExp(`^(?:${field.pattern})$`).test(value)) errors[field.name] = field.hint || `Enter a valid ${field.label.toLowerCase()}.`;
+  });
+  Object.entries(addressErrors(address)).forEach(([name, message]) => {
+    errors[name] ||= message;
   });
   if (Object.keys(errors).length) throw new ApiError(422, 'Check the highlighted fields.', errors);
   const outside = serviceAddressErrors(address);
@@ -118,6 +125,7 @@ function createOrder(customer, seller, lines, { address, zone, payment, checkout
   const { fee: shippingFee, partner } = checkoutQuote(lines, zone, logisticsOptions());
   if (!shippingFee) throw new ApiError(409, 'No courier delivers to that area with Cash on Delivery right now.');
   const placedAt = new Date();
+  const place = { ...standardAddress(address), ...CITY };
   const prepareDays = Math.max(STANDARD_PREPARE_DAYS, ...lines.map(({ product }) => (product.preOrder ? Number(product.preOrderDays) : 0)));
   const cod = payment === 'Cash on Delivery';
   const order = {
@@ -130,7 +138,11 @@ function createOrder(customer, seller, lines, { address, zone, payment, checkout
       name: address.name.trim(),
       username: customer.username,
       phone: address.contact.trim(),
-      address: [address.street, address.barangay, address.city, address.province, address.zip].map((part) => part.trim()).join(', '),
+      address: formatAddress(place),
+      // The same address in parts, so couriers and reports can sort by barangay and street.
+      barangay: place.barangay,
+      street: place.street,
+      houseNumber: place.houseNumber,
     },
     zone,
     placedAt: placedAt.toISOString(),

@@ -5,23 +5,55 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { Form, Sections } from './Forms';
 import { ThemeToggle } from './Header';
 import Icon from './Icon';
 import { SELLER_NAV } from '@/lib/data';
 import { send } from '@/lib/productsApi';
-import { Auth, useStored } from '@/lib/store';
-import { Modal, notBuilt } from '@/lib/ui';
+import { addressSection, formatAddress } from '@/lib/address';
+import { Auth, FieldError, useStored } from '@/lib/store';
+import { Modal, notBuilt, toast } from '@/lib/ui';
+
+// The store address in the standard format. Pickups are collected from it.
+function openAddressForm(seller) {
+  Modal.open({
+    title: 'Store address',
+    content: (
+      <Form
+        id="seller-address-form"
+        onSubmit={async (values) => {
+          try {
+            const body = await send('/api/seller/address', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values) });
+            Auth.setAccount(body.account);
+          } catch (err) {
+            const [field, message] = Object.entries(err.fields || {})[0] || [];
+            throw field ? new FieldError(field, message) : err;
+          }
+          toast('Store address saved.', 'success');
+          Modal.close();
+        }}
+      >
+        <Sections schema={[{ ...addressSection('', seller), legend: undefined }]} prefix="store" panel="seller" />
+        <p className="muted">Couriers collect your pickups from this address.</p>
+        <p className="form-error" role="alert" />
+        <button className="btn btn--primary btn--block" type="submit">Save Address</button>
+      </Form>
+    ),
+  });
+}
 
 function openShopInfo(seller) {
-  const address = [seller.street, seller.barangay, seller.city, seller.province, seller.zip, seller.country].join(', ');
   Modal.open({
     title: 'Shop information',
     content: (
-      <dl className="shop-info">
-        <dt>Shop name</dt><dd>{seller.shopName}</dd>
-        <dt>Username</dt><dd>{seller.username}</dd>
-        <dt>Shop address</dt><dd>{address}</dd>
-      </dl>
+      <>
+        <dl className="shop-info">
+          <dt>Shop name</dt><dd>{seller.shopName}</dd>
+          <dt>Username</dt><dd>{seller.username}</dd>
+          <dt>Shop address</dt><dd>{formatAddress(seller)}{!seller.addressCurrent && <small className="form-error"> Choose its barangay and street again.</small>}</dd>
+        </dl>
+        <button className="btn-mini btn-mini--primary" type="button" onClick={() => openAddressForm(seller)}>Edit Address</button>
+      </>
     ),
   });
 }
@@ -172,6 +204,12 @@ export default function SellerShell({ account, children }) {
   return (
     <div className="seller">
       <SellerBar seller={seller} navOpen={navOpen} onToggleNav={() => setNavOpen(!navOpen)} />
+      {seller.addressCurrent === false && (
+        <p className="admin-banner address-banner" role="status">
+          <strong>Update your store address.</strong> Onetap now uses Tuguegarao&apos;s official barangays and street list, so couriers can find you.
+          {' '}<button className="link" type="button" onClick={() => openAddressForm(seller)}>Choose your barangay and street</button>
+        </p>
+      )}
       <div className="seller-shell">
         <SellerNav seller={seller} open={navOpen} />
         {children}

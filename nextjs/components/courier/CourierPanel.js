@@ -9,9 +9,11 @@ import { useCallback, useEffect, useState } from 'react';
 import Icon from '../Icon';
 import { ThemeToggle } from '../Header';
 import { courierFetch, COURIER_CLIENT, dateOnly, dateTime, DataTable, DateFilter, FilterBar, NavCount, PageHead, percent, postCourier, useNavCounts, RateBars, StatCards, Tabs, TextField, TrendChart, useAdminList, useRefresh, Badge } from '../admin/AdminUI';
+import { Form, Sections } from '../Forms';
 import { openWaybill, ProofPhotos } from '../SellerOrders';
 import { RiderSection } from './CourierRiders';
 import { COD_STATUS, COURIER_PICKUP_STATUS, HANDOVER_STATUS, options, SHIPMENT_STATUS, TASK_STATUS } from '@/lib/adminLabels';
+import { addressSection, formatAddress } from '@/lib/address';
 import { Modal, peso, toast } from '@/lib/ui';
 
 // Finance has its own heading. Remittances is a dropdown with a page for each kind.
@@ -57,6 +59,7 @@ const NAV = [
   { label: 'Assignment History', href: '/courier/riders/assignments', icon: 'clock' },
   { label: 'Rider Performance', href: '/courier/riders/performance', icon: 'star' },
   { label: 'Delivery Performance', href: '/courier/reports', icon: 'truck' },
+  { label: 'Company Profile', href: '/courier/profile', icon: 'pin' },
 ];
 
 function CourierNotifications() {
@@ -171,9 +174,61 @@ export function CourierShell({ account, children }) {
         </nav>
         <div className="courier-main">
           {partner?.status === 'inactive' && <p className="admin-banner" role="status"><strong>{partner.name} has been deactivated.</strong> You won&apos;t get new pickups. Finish your {partner.openParcels === 1 ? 'open parcel' : `${partner.openParcels} open parcels`}, and this panel will close when you do.</p>}
+          {partner && !partner.hubCurrent && pathname !== '/courier/profile' && <p className="admin-banner" role="status"><strong>{partner.hubAddress ? 'Update your hub address.' : 'Add your hub address.'}</strong> Choose its barangay and street in <Link className="link" href="/courier/profile">Company Profile</Link>, so Onetap and sellers know where your parcels are handled.</p>}
           {children}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Company Profile: the partner's details, and its hub or branch address in the standard format.
+export function CourierProfile() {
+  const [partner, setPartner] = useState(null);
+  const [formKey, setFormKey] = useState(0);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    courierFetch('/profile').then((body) => setPartner(body.partner), (err) => setError(err.message));
+  }, []);
+
+  if (error) return <p className="form-error" role="alert">{error}</p>;
+  if (!partner) return <div className="skeleton" role="status" aria-label="Loading your company profile" />;
+
+  return (
+    <div className="order-page admin-page">
+      <PageHead title="Company Profile" text="Your company's details on Onetap, and the hub address Onetap and sellers see." />
+      <section className="panel">
+        <div className="panel__head"><h2>{partner.name}</h2></div>
+        <dl className="order-facts order-facts--row">
+          <div><dt>Contact</dt><dd>{partner.contact || '—'}</dd></div>
+          <div><dt>Services</dt><dd>{partner.services.join(', ')}</dd></div>
+          <div><dt>Hub address</dt><dd>{partner.hubAddress ? formatAddress(partner.hubAddress) : 'Not set yet'}{partner.hubAddress && !partner.hubCurrent && <small className="form-error"> Choose its barangay and street again below.</small>}</dd></div>
+        </dl>
+        <p className="muted">Your name, contact and rates are managed by Onetap. Ask your Onetap contact to change them.</p>
+      </section>
+      <section className="panel">
+        <div className="panel__head"><h2>Hub Address</h2></div>
+        <Form
+          key={formKey}
+          id="hub-form"
+          onSubmit={async (values) => {
+            try {
+              const body = await postCourier('/profile', values);
+              setPartner(body.partner);
+              setFormKey((n) => n + 1);
+              toast('Hub address saved.', 'success');
+            } catch (err) {
+              const [field, message] = Object.entries(err.fields || {})[0] || [];
+              throw Object.assign(new Error(message || err.message), { field });
+            }
+          }}
+        >
+          <Sections schema={[{ ...addressSection('', partner.hubAddress), legend: undefined }]} prefix="hub" panel="courier" />
+          <p className="form-error" role="alert" />
+          <button className="btn btn--primary" type="submit">Save Hub Address</button>
+        </Form>
+      </section>
     </div>
   );
 }

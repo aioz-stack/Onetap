@@ -14,6 +14,7 @@ import { Modal, toast } from '@/lib/ui';
 const NAV = [
   { label: 'Overview', href: '/admin', icon: 'chart' },
   { label: 'Logistics Partners', href: '/admin/logistics', icon: 'truck', permission: 'logistics' },
+  { label: 'Street Requests', href: '/admin/streets', icon: 'pin', permission: 'logistics' },
   { label: 'API Configuration', href: '/admin/api', icon: 'globe', permission: 'api' },
   { label: 'Pickup Approval', href: '/admin/pickups', icon: 'store', permission: 'pickups' },
   { label: 'Shipment Monitoring', href: '/admin/shipments', icon: 'box', permission: 'shipments' },

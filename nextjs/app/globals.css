@@ -372,6 +372,29 @@ button.topnav__item:hover, a.topnav__item:hover, .topnav__follow a:hover { color
 .field__hint { color: var(--muted); font-size: 13px; }
 .field__error { color: var(--danger); font-size: 13px; font-weight: 500; }
 .field__error:empty { display: none; }
+/* The standard address: searchable Barangay and Street lists, and the fixed city. */
+.field__label { font-size: 14px; font-weight: 600; }
+.field__link { align-self: flex-start; font-size: 13px; }
+.search-select { position: relative; }
+.search-select input[disabled] { background: var(--surface-2); color: var(--muted); cursor: not-allowed; }
+.search-select__pop {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-lg); overflow: hidden;
+}
+.search-select__list { max-height: 240px; margin: 0; padding: 4px; overflow-y: auto; list-style: none; }
+.search-select__list li { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 8px 10px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+.search-select__list li[aria-selected="true"] { background: var(--surface-2); }
+.search-select__list li.is-chosen { color: var(--link); font-weight: 600; }
+.search-select__list small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.search-select__list .search-select__empty { color: var(--muted); cursor: default; }
+.search-select__report { display: block; width: 100%; padding: 10px 14px; border-top: 1px solid var(--border); color: var(--link); font-size: 13px; font-weight: 600; text-align: left; }
+.search-select__report:hover { background: var(--surface-2); }
+.report-street { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; padding: 10px; border: 1px dashed var(--border); border-radius: 10px; }
+.report-street label { font-size: 13px; }
+.report-street__row { display: flex; gap: 8px; }
+.report-street__row input { flex: 1; min-height: 38px; }
+.report-street small { font-size: 12px; }
+.address-fixed { display: flex; align-items: center; min-height: 44px; margin: 0; padding: 9px 12px; border: 1px dashed var(--border); border-radius: 10px; color: var(--text); font-size: 14px; }
 .password { position: relative; display: block; }
 .password input { padding-right: 44px; }
 .password__toggle {

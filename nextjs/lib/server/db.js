@@ -532,6 +532,36 @@ export function getDb() {
       PRIMARY KEY (customer, item_key)
     );
   `);
+  // Tuguegarao streets by barangay, for the standard address (lib/address.js, streets.js). Rows come
+  // from lib/tuguegaraoStreets.json (OpenStreetMap), approved street requests, or administrators.
+  // Hidden streets can't be chosen for new addresses. street_requests holds missing-street reports.
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS streets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barangay TEXT NOT NULL,
+      name TEXT NOT NULL COLLATE NOCASE,
+      source TEXT NOT NULL,
+      hidden INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE (barangay, name)
+    );
+    CREATE TABLE IF NOT EXISTS street_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barangay TEXT NOT NULL,
+      name TEXT NOT NULL COLLATE NOCASE,
+      note TEXT NOT NULL DEFAULT '',
+      role TEXT NOT NULL,
+      username TEXT NOT NULL DEFAULT '',
+      ip_hash TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending',
+      reason TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      decided_at INTEGER,
+      decided_by TEXT NOT NULL DEFAULT ''
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS street_requests_one_open ON street_requests (barangay, name) WHERE status = 'pending';
+  `);
   // A new task's notice keeps the order, customer, pickup location and assignment time as JSON.
   addColumns(database, 'rider_notifications', { details: "TEXT NOT NULL DEFAULT ''" });
   // The rider who collected a COD parcel's cash, and the remittance they handed it over in.

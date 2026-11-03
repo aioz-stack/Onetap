@@ -10,6 +10,8 @@ import { verificationOf } from '../adminLabels';
 import { CUSTOMER_PROFILE_SECTIONS, ID_NUMBER } from '../schemas';
 import { audit } from './admin';
 import { checkFields, registerAccount } from './auth';
+import { standardAddress } from './streets';
+import { formatAddress } from '../address';
 import { getDb, UPLOAD_DIR } from './db';
 import { ApiError } from './errors';
 import { csvResponse, dateRange, isoDate, listQuery, search } from './lists';
@@ -188,7 +190,7 @@ export function updateProfile(username, input) {
   if (email !== row.email && db().prepare('SELECT 1 FROM customers WHERE email = ? AND username <> ?').get(email, row.username)) {
     throw new ApiError(409, 'An account with this email already exists.', { email: 'An account with this email already exists.' });
   }
-  const next = { ...profile, ...Object.fromEntries(EDITABLE.filter((field) => field.name !== 'email').map(({ name }) => [name, String(input[name] ?? '').trim()])) };
+  const next = { ...profile, ...Object.fromEntries(EDITABLE.filter((field) => field.name !== 'email').map(({ name }) => [name, String(input[name] ?? '').trim()])), ...standardAddress(input) };
   // The same number written differently isn't a change. A new one must be verified by code.
   const mobile = normalizeMobile(next.contact);
   const contactChanged = mobile !== normalizeMobile(profile.contact);
@@ -245,7 +247,7 @@ export function customerApprovalCounts() {
 }
 
 const fullName = (profile) => [profile.firstName, profile.middleName, profile.lastName, profile.suffix].filter(Boolean).join(' ');
-const addressOf = (profile) => [profile.street, profile.barangay, profile.city, profile.province, profile.country, profile.zip].filter(Boolean).join(', ');
+const addressOf = (profile) => formatAddress(profile);
 
 function toSummary(row) {
   const profile = JSON.parse(row.profile);

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { adminFetch, Badge, dateTime, DataTable, FilterBar, PageHead, postAdmin, Tabs, useAdminList } from './AdminUI';
 import { confirmModal } from '../SellerProducts';
 import { APPLICATION_STATUS } from '@/lib/adminLabels';
+import { formatAddress } from '@/lib/address';
 import { Modal, toast } from '@/lib/ui';
 
 const ACTIONS = { submitted: 'Submitted', resubmitted: 'Resubmitted', approve: 'Approved', disapprove: 'Disapproved', request_info: 'Information requested', suspend: 'Suspended' };
@@ -79,7 +80,7 @@ function ApplicationDetail({ username, onChanged }) {
           <div><dt>Username</dt><dd>{application.username}</dd></div>
           <div><dt>Email</dt><dd>{application.email}</dd></div>
           <div><dt>Contact number</dt><dd>{profile.contact}</dd></div>
-          <div><dt>Address</dt><dd>{[profile.street, profile.barangay, profile.city, profile.province, profile.zip, profile.country].filter(Boolean).join(', ')}</dd></div>
+          <div><dt>Address</dt><dd>{formatAddress(profile)}</dd></div>
         </dl>
       </section>
       <section>

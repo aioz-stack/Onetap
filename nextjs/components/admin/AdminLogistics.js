@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { confirmModal } from '../SellerProducts';
 import { adminFetch, Badge, CheckGroup, dateTime, DataTable, FilterBar, PageHead, percent, postAdmin, SandboxBanner, SelectFilter, TextField, useAdminList, useRefresh } from './AdminUI';
 import { API_STATUS, options } from '@/lib/adminLabels';
+import { formatAddress } from '@/lib/address';
 import { SHIPPING_ZONES } from '@/lib/data';
 import { Modal, peso, toast } from '@/lib/ui';
 
@@ -272,6 +273,7 @@ export function AdminLogistics() {
               <div><dt>Delivery options</dt><dd>{partner.services.join(', ')}</dd></div>
               <div><dt>Pickup locations</dt><dd>{partner.pickupLocations.join(', ') || 'None'}</dd></div>
               <div><dt>Delivery locations</dt><dd>{partner.deliveryLocations.join(', ') || 'None'}</dd></div>
+              <div><dt>Hub address</dt><dd>{partner.hubAddress ? formatAddress(partner.hubAddress) : 'Not set by the partner yet'}</dd></div>
               <div><dt>Available to</dt><dd>{[partner.forSellers && 'Sellers', partner.forCustomers && 'Customers'].filter(Boolean).join(', ') || 'Nobody'}</dd></div>
               <div><dt>{SHIPPING_ZONES[0]} rate</dt><dd>{peso(Number(partner.base[SHIPPING_ZONES[0]]))}</dd></div>
               <div><dt>Delivery success</dt><dd>{percent(partner.stats.successRate)}</dd></div>

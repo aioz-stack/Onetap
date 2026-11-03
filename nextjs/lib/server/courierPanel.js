@@ -15,6 +15,8 @@ import { ApiError } from './errors';
 import { csvResponse, dateRange, equals, isoDate, listQuery, search } from './lists';
 import { daily, dayColumn } from './overview';
 import { route } from './route';
+import { checkedAddress, isCurrentAddress } from './streets';
+import { formatAddress } from '../address';
 import { sendSandboxEvent, shipmentDetail } from './shipments';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -54,8 +56,11 @@ export const courierLogin = (request, identifier, password) => loginAccount('cou
 
 // The partner's details as Onetap holds them. The only copy is in the database, so an edit shows here straight away.
 export function courierPartner(partnerId) {
-  const { name, environment, status, contact, services, zones, pickupLocations, deliveryLocations, base, perHalfKg, remittanceDays } = loadPartner(partnerId);
-  return { name, environment, status, contact, services, zones, pickupLocations, deliveryLocations, base, perHalfKg, remittanceDays, openParcels: panelAccess(partnerId).openParcels };
+  const { name, environment, status, contact, services, zones, pickupLocations, deliveryLocations, base, perHalfKg, remittanceDays, hubAddress } = loadPartner(partnerId);
+  return {
+    name, environment, status, contact, services, zones, pickupLocations, deliveryLocations, base, perHalfKg, remittanceDays, openParcels: panelAccess(partnerId).openParcels,
+    hubAddress: hubAddress || null, hubCurrent: isCurrentAddress(hubAddress),
+  };
 }
 
 export function courierOverview(partnerId) {
@@ -264,4 +269,13 @@ export async function changeCourierPassword(account, current, next) {
   if (typeof next !== 'string' || next.length < 12 || next.length > 128) throw new ApiError(422, 'Use at least 12 characters.', { next: 'Use at least 12 characters.' });
   db().prepare('UPDATE courier_users SET password = ? WHERE username = ?').run(await hashPassword(next), row.username);
   audit(actorFor(account), 'courier_user.password_changed', 'partner', account.partnerId, { username: row.username });
+}
+
+// The partner's hub or branch address, in the standard format, set from its Company Profile.
+export function savePartnerHub(account, input) {
+  const hub = checkedAddress(input);
+  const row = db().prepare('SELECT data FROM logistics_partners WHERE id = ?').get(account.partnerId);
+  db().prepare('UPDATE logistics_partners SET data = ?, updated_at = ? WHERE id = ?').run(JSON.stringify({ ...JSON.parse(row.data), hubAddress: hub }), Date.now(), account.partnerId);
+  audit({ username: account.username, adminRole: `courier:${account.partnerId}` }, 'partner.hub_changed', 'logistics_partner', account.partnerId, { address: formatAddress(hub) });
+  return courierPartner(account.partnerId);
 }

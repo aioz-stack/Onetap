@@ -55,6 +55,14 @@ export const LISTING_STATUS = {
 };
 
 // Customer Approval as administrators see it. A rejected customer is Unverified to themselves.
+// Missing-street reports (streets.js) and where a listed street came from.
+export const STREET_REQUEST_STATUS = {
+  pending: { label: 'Pending', tone: 'warn' },
+  approved: { label: 'Approved', tone: 'ok' },
+  rejected: { label: 'Rejected', tone: 'danger' },
+};
+export const STREET_SOURCE = { osm: 'OpenStreetMap', request: 'Approved report', admin: 'Added by admin' };
+
 export const CUSTOMER_APPROVAL_STATUS = {
   pending: { label: 'Pending Verification', tone: 'warn' },
   approved: { label: 'Verified', tone: 'ok' },

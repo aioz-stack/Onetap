@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { adminFetch, Badge, DataTable, DateFilter, dateTime, FilterBar, PageHead, postAdmin, Tabs, useAdminList, useRefresh } from './AdminUI';
 import { confirmModal } from '../SellerProducts';
 import { CUSTOMER_APPROVAL_STATUS } from '@/lib/adminLabels';
+import { isBarangay } from '@/lib/address';
 import { Modal, toast } from '@/lib/ui';
 
 const ACTIONS = { submitted: 'Registered', resubmitted: 'Updated their valid ID', details_changed: 'Changed their name', approve: 'Approved', reject: 'Rejected' };
@@ -84,12 +85,10 @@ function CustomerDetail({ username, onChanged }) {
       <section>
         <h3>Complete Address</h3>
         <dl className="order-facts order-facts--row">
+          <div><dt>Barangay</dt><dd>{profile.barangay || '—'}{profile.barangay && !isBarangay(profile.barangay) && <small className="admin-cell-note">Older address, not yet updated</small>}</dd></div>
           <div><dt>Street</dt><dd>{profile.street || '—'}</dd></div>
-          <div><dt>Barangay</dt><dd>{profile.barangay || '—'}</dd></div>
-          <div><dt>City</dt><dd>{profile.city || '—'}</dd></div>
-          <div><dt>Province</dt><dd>{profile.province || '—'}</dd></div>
-          <div><dt>Country</dt><dd>{profile.country || '—'}</dd></div>
-          <div><dt>ZIP code</dt><dd>{profile.zip || '—'}</dd></div>
+          <div><dt>House / Building / Unit No.</dt><dd>{profile.houseNumber || '—'}</dd></div>
+          <div><dt>City</dt><dd>{[profile.city, profile.province, profile.zip].filter(Boolean).join(', ') || '—'}</dd></div>
         </dl>
       </section>
       <section>
