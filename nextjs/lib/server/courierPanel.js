@@ -173,6 +173,60 @@ export function listCourierCod(params, partnerId) {
   return Response.json({ ...page, rows: records });
 }
 
+// Finance > Remittances > Logistics Remittance: the partner's money with Onetap. COD cash it
+// collected and remits to Onetap (each remittance Onetap records against its parcels), and the
+// delivery fee on every delivered parcel, split into Onetap's logistics fee and the partner's share.
+const REMITTANCE_STATE = (row) => (row.received === row.expected ? 'matched' : row.received < row.expected ? 'short' : 'over');
+
+export function courierLogisticsRemittances(params, partnerId) {
+  const view = params.get('view') === 'deliveries' ? 'deliveries' : 'remittances';
+  const sum = (sql, ...args) => db().prepare(sql).get(partnerId, ...args).v;
+  const summary = {
+    awaiting: sum("SELECT COALESCE(SUM(collected), 0) AS v FROM cod_records WHERE partner_id = ? AND status = 'collected'"),
+    awaitingParcels: sum("SELECT COUNT(*) AS v FROM cod_records WHERE partner_id = ? AND status = 'collected'"),
+    overdue: sum("SELECT COALESCE(SUM(collected), 0) AS v FROM cod_records WHERE partner_id = ? AND status = 'collected' AND due_at < ?", Date.now()),
+    remitted: sum('SELECT COALESCE(SUM(received), 0) AS v FROM cod_remittances WHERE partner_id = ?'),
+    remittances: sum('SELECT COUNT(*) AS v FROM cod_remittances WHERE partner_id = ?'),
+    discrepancies: sum('SELECT COUNT(*) AS v FROM cod_remittances WHERE partner_id = ? AND received <> expected'),
+    deliveryFees: sum('SELECT COALESCE(SUM(rider_fee), 0) AS v FROM collection_records WHERE partner_id = ?'),
+    logisticsFees: sum('SELECT COALESCE(SUM(logistics_fee), 0) AS v FROM collection_records WHERE partner_id = ?'),
+    courierShare: sum('SELECT COALESCE(SUM(courier_share), 0) AS v FROM collection_records WHERE partner_id = ?'),
+  };
+  if (view === 'remittances') {
+    const where = [['r.partner_id = ?', partnerId], ...search(params, ['r.reference', 'r.note']), ...dateRange(params, 'r.at')];
+    const { rows, ...page } = listQuery(db(), {
+      select: 'r.*, (SELECT COUNT(*) FROM cod_records c WHERE c.remittance_id = r.id) AS parcels',
+      from: 'cod_remittances r', where, sorts: { at: 'r.at', received: 'r.received' }, defaultSort: 'at',
+    }, params);
+    const records = rows.map((row) => ({
+      id: row.id, reference: row.reference, parcels: row.parcels, expected: row.expected, received: row.received, difference: row.received - row.expected,
+      status: REMITTANCE_STATE(row), note: row.note, at: row.at,
+    }));
+    if (params.get('format') === 'csv') {
+      return csvResponse('onetap-cod-remittances.csv', [['Reference', (r) => r.reference], ['Parcels', (r) => r.parcels], ['Expected', (r) => r.expected], ['Received', (r) => r.received], ['Difference', (r) => r.difference], ['Status', (r) => r.status], ['Note', (r) => r.note], ['Recorded', (r) => isoDate(r.at)]], records);
+    }
+    return Response.json({ view, summary, ...page, rows: records });
+  }
+  const where = [['cr.partner_id = ?', partnerId], ...search(params, ['cr.order_id', 'cr.shop_name', 'cr.customer_name']), ...dateRange(params, 'cr.collected_at')];
+  const { rows, ...page } = listQuery(db(), {
+    select: 'cr.*, c.status AS cod_status, c.remitted_at, r.reference AS remittance_reference',
+    from: 'collection_records cr LEFT JOIN cod_records c ON c.order_id = cr.order_id LEFT JOIN cod_remittances r ON r.id = c.remittance_id',
+    where, sorts: { delivered: 'cr.collected_at', fee: 'cr.rider_fee' }, defaultSort: 'delivered',
+  }, params);
+  // How the parcel's money stands: prepaid is with Onetap already, COD is with the partner until remitted.
+  const records = rows.map((row) => ({
+    orderId: row.order_id, seller: row.shop_name, paymentMethod: row.payment_method, deliveredAt: row.collected_at, orderTotal: row.total,
+    deliveryFee: row.rider_fee, logisticsFee: row.logistics_fee, courierShare: row.courier_share ?? row.rider_fee,
+    paymentStatus: row.payment_method !== 'Cash on Delivery' ? 'prepaid' : row.cod_status === 'remitted' ? 'remitted' : 'awaiting',
+    remittanceReference: row.remittance_reference || '', remittedAt: row.remitted_at,
+  }));
+  if (params.get('format') === 'csv') {
+    return csvResponse('onetap-delivery-fees.csv', [['Order', (r) => r.orderId], ['Seller', (r) => r.seller], ['Payment', (r) => r.paymentMethod], ['Delivered', (r) => isoDate(r.deliveredAt)], ['Order total', (r) => r.orderTotal],
+      ['Delivery fee', (r) => r.deliveryFee], ['Onetap logistics fee', (r) => r.logisticsFee], ['Your share', (r) => r.courierShare], ['Payment status', (r) => r.paymentStatus], ['Remittance', (r) => r.remittanceReference]], records);
+  }
+  return Response.json({ view, summary, ...page, rows: records });
+}
+
 const rate = (part, whole) => (whole ? part / whole : null);
 
 export function courierReports(params, partnerId) {

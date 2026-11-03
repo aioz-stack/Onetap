@@ -534,7 +534,8 @@ export function CourierRiderRemittances({ initial }) {
 
   return (
     <div className="order-page admin-page">
-      <PageHead title="Rider Remittances" text="Riders hand over the COD cash they collect. Count it, then confirm what you received or reject the handover." />
+      <p className="income-eyebrow">Finance · Remittances</p>
+      <PageHead title="Rider Remittance" text="Riders hand over the COD cash they collect. Count it, then confirm what you received or reject the handover." />
       {summary && (
         <section className="panel">
           <StatCards items={[

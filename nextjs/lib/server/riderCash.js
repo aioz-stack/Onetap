@@ -111,7 +111,7 @@ export function submitRiderRemittance(rider, { amount, note }) {
       .run(id, reference, rider.partnerId, rider.riderId, held.parcels, held.amount, money(declared), String(note ?? '').trim().slice(0, 200), time);
     db().prepare(`UPDATE cod_records SET rider_remittance_id = ? WHERE ${HELD}`).run(id, rider.riderId);
     const gap = money(declared - held.amount);
-    notifyCourier(rider.partnerId, 'Rider cash handed over', `${rider.name} handed over ${peso(declared)} for ${held.parcels} COD parcel${held.parcels === 1 ? '' : 's'} (${reference})${gap ? `, ${gap < 0 ? 'short' : 'over'} by ${peso(Math.abs(gap))}` : ''}. Confirm what you received.`, '/courier/riders/remittances');
+    notifyCourier(rider.partnerId, 'Rider cash handed over', `${rider.name} handed over ${peso(declared)} for ${held.parcels} COD parcel${held.parcels === 1 ? '' : 's'} (${reference})${gap ? `, ${gap < 0 ? 'short' : 'over'} by ${peso(Math.abs(gap))}` : ''}. Confirm what you received.`, '/courier/finance/remittances/riders');
     audit(riderActor(rider), 'rider_remittance.submitted', 'rider_remittance', reference, { expected: held.amount, declared: money(declared), parcels: held.parcels });
     return { reference, expected: held.amount, declared: money(declared) };
   });

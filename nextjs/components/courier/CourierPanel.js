@@ -14,6 +14,39 @@ import { RiderSection } from './CourierRiders';
 import { COD_STATUS, COURIER_PICKUP_STATUS, HANDOVER_STATUS, options, SHIPMENT_STATUS, TASK_STATUS } from '@/lib/adminLabels';
 import { Modal, peso, toast } from '@/lib/ui';
 
+// Finance has its own heading. Remittances is a dropdown with a page for each kind.
+const FINANCE = [
+  { label: 'COD Collections', href: '/courier/cod', icon: 'wallet' },
+  {
+    label: 'Remittances', icon: 'wallet', id: 'courier-remittances', base: '/courier/finance/remittances',
+    items: [{ label: 'Logistics Remittance', href: '/courier/finance/remittances/logistics' }, { label: 'Rider Remittance', href: '/courier/finance/remittances/riders' }],
+  },
+];
+
+function FinanceNav({ pathname }) {
+  const dropdown = FINANCE[1];
+  const inside = pathname.startsWith(dropdown.base);
+  const [open, setOpen] = useState(inside);
+  useEffect(() => {
+    if (inside) setOpen(true);
+  }, [inside]);
+  return (
+    <div className="nav-section" role="group" aria-labelledby="courier-finance">
+      <span className="seller-nav__heading nav-section__heading" id="courier-finance">Finance</span>
+      <Link className="seller-nav__home" href={FINANCE[0].href} aria-current={pathname === FINANCE[0].href ? 'page' : undefined}><Icon name={FINANCE[0].icon} /> {FINANCE[0].label}</Link>
+      <button className={`seller-nav__home nav-dropdown${inside ? ' is-inside' : ''}`} type="button" aria-expanded={open} aria-controls={dropdown.id} onClick={() => setOpen(!open)}>
+        <Icon name={dropdown.icon} /> {dropdown.label}
+        <Icon name="chevron" className="icon icon--sm seller-nav__chevron nav-dropdown__chevron" />
+      </button>
+      <ul className="nav-dropdown__list" id={dropdown.id} hidden={!open}>
+        {dropdown.items.map((item) => (
+          <li key={item.href}><Link href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</Link></li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 const NAV = [
   { label: 'Dashboard', href: '/courier', icon: 'chart' },
   { label: 'Assigned Pickups', href: '/courier/pickups', icon: 'store' },
@@ -21,8 +54,6 @@ const NAV = [
   { label: 'Rider Management', href: '/courier/riders', icon: 'user' },
   { label: 'Assignment History', href: '/courier/riders/assignments', icon: 'clock' },
   { label: 'Rider Performance', href: '/courier/riders/performance', icon: 'star' },
-  { label: 'Rider Remittances', href: '/courier/riders/remittances', icon: 'wallet' },
-  { label: 'COD Collections', href: '/courier/cod', icon: 'wallet' },
   { label: 'Delivery Performance', href: '/courier/reports', icon: 'truck' },
 ];
 
@@ -132,6 +163,7 @@ export function CourierShell({ account, children }) {
           {NAV.map((item) => (
             <Link className="seller-nav__home" href={item.href} key={item.href} aria-current={pathname === item.href ? 'page' : undefined}><Icon name={item.icon} /> {item.label}</Link>
           ))}
+          <FinanceNav pathname={pathname} />
         </nav>
         <div className="courier-main">
           {partner?.status === 'inactive' && <p className="admin-banner" role="status"><strong>{partner.name} has been deactivated.</strong> You won&apos;t get new pickups. Finish your {partner.openParcels === 1 ? 'open parcel' : `${partner.openParcels} open parcels`}, and this panel will close when you do.</p>}
@@ -612,6 +644,90 @@ export function CourierCod({ initial }) {
           { label: 'Remit by', sort: 'due', render: (row) => dateOnly(row.dueAt) },
         ]}
       />
+    </div>
+  );
+}
+
+const MATCH = {
+  matched: { label: 'Matched', tone: 'ok' },
+  short: { label: 'Short', tone: 'danger' },
+  over: { label: 'Over', tone: 'warn' },
+};
+const PARCEL_PAYMENT = {
+  prepaid: { label: 'Prepaid to Onetap', tone: 'info' },
+  awaiting: { label: 'Awaiting Remittance', tone: 'warn' },
+  remitted: { label: 'Remitted', tone: 'ok' },
+};
+
+export function CourierLogisticsRemittance({ initial }) {
+  const list = useAdminList('/finance/remittances', { view: 'remittances', ...initial }, COURIER_CLIENT);
+  useRefresh(list.reload);
+  const view = list.filters.view === 'deliveries' ? 'deliveries' : 'remittances';
+  const summary = list.data?.summary;
+  // Switching tabs keeps the old rows until the new ones arrive, and each tab's columns only fit its own rows.
+  const ready = list.data?.view === view;
+  const signed = (value) => (value === 0 ? peso(0) : `${value > 0 ? '+' : '−'}${peso(Math.abs(value))}`);
+
+  return (
+    <div className="order-page admin-page">
+      <p className="income-eyebrow">Finance · Remittances</p>
+      <PageHead title="Logistics Remittance" text="COD cash you remit to Onetap, and the delivery fee on every parcel you delivered: Onetap's logistics fee and your share." />
+      {summary && (
+        <section className="panel">
+          <StatCards items={[
+            { label: `Awaiting Remittance (${summary.awaitingParcels})`, value: peso(summary.awaiting), href: '/courier/cod?status=collected' },
+            { label: 'Overdue', value: peso(summary.overdue) },
+            { label: `Remitted to Onetap (${summary.remittances})`, value: peso(summary.remitted) },
+            { label: 'Delivery Fees', value: peso(summary.deliveryFees) },
+            { label: 'Onetap Logistics Fees', value: peso(summary.logisticsFees) },
+            { label: 'Your Share', value: peso(summary.courierShare) },
+          ]} />
+          {summary.discrepancies > 0 && <p className="admin-banner" role="note"><strong>{summary.discrepancies} {summary.discrepancies === 1 ? 'remittance doesn\'t' : 'remittances don\'t'} match.</strong> Onetap recorded a different amount than expected. Check the Remittances to Onetap tab.</p>}
+        </section>
+      )}
+      <div className="order-tabs" role="group" aria-label="Show">
+        {[['remittances', 'Remittances to Onetap'], ['deliveries', 'Delivery Fees by Parcel']].map(([key, label]) => (
+          <button type="button" key={key} aria-pressed={view === key} onClick={() => list.setFilter('view', key)}>{label}</button>
+        ))}
+      </div>
+      <FilterBar list={list} placeholder={view === 'remittances' ? 'Reference or note' : 'Order, seller or customer'}>
+        <DateFilter list={list} name="from" label="From" />
+        <DateFilter list={list} name="to" label="To" />
+      </FilterBar>
+      {!ready ? <div className="skeleton" role="status" aria-label="Loading" /> : view === 'remittances' ? (
+        <DataTable
+          list={list}
+          label="COD remittances to Onetap"
+          empty="No remittances yet. Onetap records each one when it receives your COD cash."
+          rowKey={(row) => row.id}
+          columns={[
+            { label: 'Reference', render: (row) => <strong>{row.reference}</strong> },
+            { label: 'Parcels', render: (row) => row.parcels },
+            { label: 'Expected', render: (row) => peso(row.expected) },
+            { label: 'Received by Onetap', sort: 'received', render: (row) => peso(row.received) },
+            { label: 'Difference', render: (row) => signed(row.difference) },
+            { label: 'Status', render: (row) => <Badge status={MATCH[row.status]} /> },
+            { label: 'Recorded', sort: 'at', render: (row) => <>{dateTime(row.at)}{row.note && <small className="admin-cell-note">{row.note}</small>}</> },
+          ]}
+        />
+      ) : (
+        <DataTable
+          list={list}
+          label="Delivery fees by parcel"
+          empty="No delivered parcels yet"
+          rowKey={(row) => row.orderId}
+          columns={[
+            { label: 'Order', render: (row) => row.orderId },
+            { label: 'Seller', render: (row) => row.seller },
+            { label: 'Payment', render: (row) => row.paymentMethod },
+            { label: 'Delivery Fee', sort: 'fee', render: (row) => peso(row.deliveryFee) },
+            { label: 'Logistics Fee', render: (row) => peso(row.logisticsFee) },
+            { label: 'Your Share', render: (row) => <strong>{peso(row.courierShare)}</strong> },
+            { label: 'Status', render: (row) => <><Badge status={PARCEL_PAYMENT[row.paymentStatus]} />{row.remittanceReference && <small className="admin-cell-note">{row.remittanceReference}</small>}</> },
+            { label: 'Delivered', sort: 'delivered', render: (row) => dateTime(row.deliveredAt) },
+          ]}
+        />
+      )}
     </div>
   );
 }

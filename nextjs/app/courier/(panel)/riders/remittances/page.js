@@ -1,9 +1,6 @@
-import { CourierRiderRemittances } from '@/components/courier/CourierRiders';
-import { pageCourier } from '@/lib/server/courierPanel';
+import { redirect } from 'next/navigation';
 
-export const metadata = { title: 'Rider Remittances' };
-
-export default async function CourierRiderRemittancesPage({ searchParams }) {
-  await pageCourier();
-  return <CourierRiderRemittances initial={await searchParams} />;
+// Rider remittances moved to Finance > Remittances. Older links and notifications still land there.
+export default function OldRiderRemittancesPage() {
+  redirect('/courier/finance/remittances/riders');
 }

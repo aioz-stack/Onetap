@@ -1134,6 +1134,18 @@ button.topnav__item:hover, a.topnav__item:hover, .topnav__follow a:hover { color
   .income-controls__spacer { display: none; }
   .income-page .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* A titled group in a panel's sidebar, with a dropdown (Logistics Partner Panel > Finance) */
+.nav-section { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.nav-section__heading { padding-left: 10px; }
+.nav-dropdown { width: 100%; text-align: left; }
+.nav-dropdown__chevron { margin-left: auto; transition: transform .15s ease; }
+.nav-dropdown[aria-expanded="true"] .nav-dropdown__chevron { transform: rotate(180deg); }
+.nav-dropdown.is-inside { color: var(--link); }
+.nav-dropdown__list { margin: 0 0 6px; padding: 0; list-style: none; }
+.nav-dropdown__list a { display: block; padding: 6px 10px 6px 38px; border-radius: 8px; font-size: 14px; }
+.nav-dropdown__list a:hover { background: var(--surface-2); color: var(--link); }
+.nav-dropdown__list a[aria-current] { background: var(--surface-2); color: var(--link); font-weight: 700; }
+
 /* Admin Console: Fee Management */
 .fee-editors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .fee-editor { display: flex; flex-direction: column; gap: 10px; margin: 0; min-width: 0; }
