@@ -2,6 +2,7 @@
 
 // Building blocks shared by every Admin Console page.
 
+import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
 import { Badge } from '../SellerOrders';
@@ -29,8 +30,36 @@ function panelFetch(base, login) {
       error.fields = body.fields;
       throw error;
     }
+    // Anything that changed something may change what is waiting, so the sidebar counts reload.
+    if (options.method && options.method !== 'GET') window.dispatchEvent(new Event(COUNTS_CHANGED));
     return body;
   };
+}
+
+export const COUNTS_CHANGED = 'onetap:counts';
+const COUNTS_MS = 10000;
+
+// A panel's sidebar counts: work waiting in each section, keyed by the section's path. They reload
+// every 10 seconds, on every page change, and straight after any action in the panel.
+export function useNavCounts(fetcher) {
+  const [counts, setCounts] = useState({});
+  const pathname = usePathname();
+  const load = useCallback(() => fetcher('/nav-counts').then((body) => setCounts(body.counts || {})).catch(() => {}), [fetcher]);
+  useRefresh(load, COUNTS_MS);
+  useEffect(() => {
+    load();
+  }, [load, pathname]);
+  useEffect(() => {
+    window.addEventListener(COUNTS_CHANGED, load);
+    return () => window.removeEventListener(COUNTS_CHANGED, load);
+  }, [load]);
+  return counts;
+}
+
+// The number beside a sidebar section. Screen readers hear it as "3 waiting".
+export function NavCount({ count, className = '' }) {
+  if (!count) return null;
+  return <span className={`nav-count ${className}`}><span aria-hidden="true">{count > 99 ? '99+' : count}</span><span className="sr-only">, {count} waiting</span></span>;
 }
 
 const jsonBody = (data, method) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });

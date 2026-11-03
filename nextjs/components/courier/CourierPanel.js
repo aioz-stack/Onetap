@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import Icon from '../Icon';
 import { ThemeToggle } from '../Header';
-import { courierFetch, COURIER_CLIENT, dateOnly, dateTime, DataTable, DateFilter, FilterBar, PageHead, percent, postCourier, RateBars, StatCards, Tabs, TextField, TrendChart, useAdminList, useRefresh, Badge } from '../admin/AdminUI';
+import { courierFetch, COURIER_CLIENT, dateOnly, dateTime, DataTable, DateFilter, FilterBar, NavCount, PageHead, percent, postCourier, useNavCounts, RateBars, StatCards, Tabs, TextField, TrendChart, useAdminList, useRefresh, Badge } from '../admin/AdminUI';
 import { openWaybill, ProofPhotos } from '../SellerOrders';
 import { RiderSection } from './CourierRiders';
 import { COD_STATUS, COURIER_PICKUP_STATUS, HANDOVER_STATUS, options, SHIPMENT_STATUS, TASK_STATUS } from '@/lib/adminLabels';
@@ -23,7 +23,7 @@ const FINANCE = [
   },
 ];
 
-function FinanceNav({ pathname }) {
+function FinanceNav({ pathname, counts }) {
   const dropdown = FINANCE[1];
   const inside = pathname.startsWith(dropdown.base);
   const [open, setOpen] = useState(inside);
@@ -33,14 +33,16 @@ function FinanceNav({ pathname }) {
   return (
     <div className="nav-section" role="group" aria-labelledby="courier-finance">
       <span className="seller-nav__heading nav-section__heading" id="courier-finance">Finance</span>
-      <Link className="seller-nav__home" href={FINANCE[0].href} aria-current={pathname === FINANCE[0].href ? 'page' : undefined}><Icon name={FINANCE[0].icon} /> {FINANCE[0].label}</Link>
+      <Link className="seller-nav__home" href={FINANCE[0].href} aria-current={pathname === FINANCE[0].href ? 'page' : undefined}><Icon name={FINANCE[0].icon} /> {FINANCE[0].label}<NavCount count={counts[FINANCE[0].href]} /></Link>
       <button className={`seller-nav__home nav-dropdown${inside ? ' is-inside' : ''}`} type="button" aria-expanded={open} aria-controls={dropdown.id} onClick={() => setOpen(!open)}>
         <Icon name={dropdown.icon} /> {dropdown.label}
+        {/* Closed, the dropdown shows what its pages have waiting. */}
+        {!open && <NavCount count={dropdown.items.reduce((sum, item) => sum + (counts[item.href] || 0), 0)} />}
         <Icon name="chevron" className="icon icon--sm seller-nav__chevron nav-dropdown__chevron" />
       </button>
       <ul className="nav-dropdown__list" id={dropdown.id} hidden={!open}>
         {dropdown.items.map((item) => (
-          <li key={item.href}><Link href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</Link></li>
+          <li key={item.href}><Link href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}<NavCount count={counts[item.href]} /></Link></li>
         ))}
       </ul>
     </div>
@@ -127,6 +129,8 @@ function PasswordForm() {
 export function CourierShell({ account, children }) {
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
+  const counts = useNavCounts(courierFetch);
+  const waiting = Object.values(counts).reduce((sum, n) => sum + n, 0);
   const [partner, setPartner] = useState(null);
 
   useEffect(() => {
@@ -145,7 +149,7 @@ export function CourierShell({ account, children }) {
   return (
     <div className="seller admin">
       <header className="seller-bar">
-        <button className="seller-bar__menu" type="button" aria-label={navOpen ? 'Close menu' : 'Open menu'} aria-expanded={navOpen} aria-controls="courier-nav" onClick={() => setNavOpen(!navOpen)}><Icon name="menu" /></button>
+        <button className="seller-bar__menu" type="button" aria-label={navOpen ? 'Close menu' : 'Open menu'} aria-expanded={navOpen} aria-controls="courier-nav" onClick={() => setNavOpen(!navOpen)}><Icon name="menu" /><NavCount count={waiting} className="nav-count--menu" /></button>
         <Link className="seller-bar__brand" href="/courier" aria-label="Partner dashboard">
           <img src="/logo.svg" alt="" width="34" height="34" />
           <span>Onetap</span>
@@ -161,9 +165,9 @@ export function CourierShell({ account, children }) {
       <div className="seller-shell">
         <nav className={`seller-nav ${navOpen ? 'is-open' : ''}`} id="courier-nav" aria-label="Logistics Partner Panel">
           {NAV.map((item) => (
-            <Link className="seller-nav__home" href={item.href} key={item.href} aria-current={pathname === item.href ? 'page' : undefined}><Icon name={item.icon} /> {item.label}</Link>
+            <Link className="seller-nav__home" href={item.href} key={item.href} aria-current={pathname === item.href ? 'page' : undefined}><Icon name={item.icon} /> {item.label}<NavCount count={counts[item.href]} /></Link>
           ))}
-          <FinanceNav pathname={pathname} />
+          <FinanceNav pathname={pathname} counts={counts} />
         </nav>
         <div className="courier-main">
           {partner?.status === 'inactive' && <p className="admin-banner" role="status"><strong>{partner.name} has been deactivated.</strong> You won&apos;t get new pickups. Finish your {partner.openParcels === 1 ? 'open parcel' : `${partner.openParcels} open parcels`}, and this panel will close when you do.</p>}

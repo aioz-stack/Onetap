@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import Icon from '../Icon';
 import { ThemeToggle } from '../Header';
-import { adminFetch, dateTime, postAdmin, TextField, useRefresh } from './AdminUI';
+import { adminFetch, dateTime, NavCount, postAdmin, TextField, useNavCounts, useRefresh } from './AdminUI';
 import { ADMIN_ROLES, can } from '@/lib/adminRoles';
 import { Modal, toast } from '@/lib/ui';
 
@@ -60,6 +60,8 @@ function PasswordForm() {
 export function AdminShell({ admin, children }) {
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
+  const counts = useNavCounts(adminFetch);
+  const waiting = Object.values(counts).reduce((sum, n) => sum + n, 0);
 
   useEffect(() => {
     setNavOpen(false);
@@ -73,7 +75,7 @@ export function AdminShell({ admin, children }) {
   return (
     <div className="seller admin">
       <header className="seller-bar">
-        <button className="seller-bar__menu" type="button" aria-label={navOpen ? 'Close menu' : 'Open menu'} aria-expanded={navOpen} aria-controls="admin-nav" onClick={() => setNavOpen(!navOpen)}><Icon name="menu" /></button>
+        <button className="seller-bar__menu" type="button" aria-label={navOpen ? 'Close menu' : 'Open menu'} aria-expanded={navOpen} aria-controls="admin-nav" onClick={() => setNavOpen(!navOpen)}><Icon name="menu" /><NavCount count={waiting} className="nav-count--menu" /></button>
         <Link className="seller-bar__brand" href="/admin" aria-label="Admin overview">
           <img src="/logo.svg" alt="" width="34" height="34" />
           <span>Onetap</span>
@@ -89,7 +91,7 @@ export function AdminShell({ admin, children }) {
       <div className="seller-shell">
         <nav className={`seller-nav ${navOpen ? 'is-open' : ''}`} id="admin-nav" aria-label="Admin Console">
           {NAV.filter((item) => !item.permission || can(admin, item.permission)).map((item) => (
-            <Link className="seller-nav__home" href={item.href} key={item.href} aria-current={pathname === item.href ? 'page' : undefined}><Icon name={item.icon} /> {item.label}</Link>
+            <Link className="seller-nav__home" href={item.href} key={item.href} aria-current={pathname === item.href ? 'page' : undefined}><Icon name={item.icon} /> {item.label}<NavCount count={counts[item.href]} /></Link>
           ))}
         </nav>
         {children}

@@ -9,7 +9,7 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
 import { ThemeToggle } from '../Header';
-import { dateOnly, dateTime, postRider, riderFetch, StatCards, TextField, useRefresh, Badge } from '../admin/AdminUI';
+import { dateOnly, dateTime, NavCount, postRider, riderFetch, StatCards, TextField, useNavCounts, useRefresh, Badge } from '../admin/AdminUI';
 import { mapLink, REPORT_FORMS, ReportForm } from '../courier/CourierPanel';
 import { COLLECTION_STATUS, HANDOVER_STATUS, RIDER_REMITTANCE_STATUS, RIDER_STATUS, SHIPMENT_STATUS, TASK_KIND, TASK_STATUS } from '@/lib/adminLabels';
 import { Modal, peso, toast } from '@/lib/ui';
@@ -407,6 +407,7 @@ const RIDER_NAV = [
 export function RiderShell({ account, children }) {
   const pathname = usePathname();
   const { panel, close, toggleProps } = useHeaderPanel();
+  const counts = useNavCounts(riderFetch);
 
   async function logout() {
     await riderFetch('/auth/logout', { method: 'POST' }).catch(() => {});
@@ -430,7 +431,7 @@ export function RiderShell({ account, children }) {
         </div>
       </header>
       <nav className="order-tabs rider-nav" aria-label="Rider Panel">
-        {RIDER_NAV.map((item) => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</Link>)}
+        {RIDER_NAV.map((item) => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}<NavCount count={counts[item.href]} /></Link>)}
       </nav>
       <main className="rider-main order-page" id="main">{children}</main>
     </div>

@@ -12,6 +12,8 @@
   --primary-hover: #1e40af;
   --link: #1d4ed8;
   --danger: #b91c1c;
+  --badge-bg: #dc2626;
+  --badge-text: #ffffff;
   --success: #15803d;
   --sale: #c2410c;
   --star: #b45309;
@@ -47,6 +49,8 @@
   --primary-hover: #1d4ed8;
   --link: #93c5fd;
   --danger: #fca5a5;
+  --badge-bg: #f87171;
+  --badge-text: #1f0707;
   --success: #86efac;
   --sale: #fdba74;
   --star: #fbbf24;
@@ -1134,6 +1138,15 @@ button.topnav__item:hover, a.topnav__item:hover, .topnav__follow a:hover { color
   .income-controls__spacer { display: none; }
   .income-page .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* Numbers beside sidebar sections and tabs: work waiting there. */
+.nav-count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-left: auto; padding: 0 6px; border-radius: 999px; background: var(--badge-bg); color: var(--badge-text); font-size: 11.5px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.seller-nav__home .nav-count, .nav-dropdown .nav-count { flex: none; }
+.nav-dropdown .nav-count { margin-left: 8px; }
+.rider-nav a { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.rider-nav .nav-count { margin-left: 0; }
+.seller-bar__menu { position: relative; }
+.nav-count--menu { position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px; padding: 0 4px; font-size: 10.5px; }
+
 /* A titled group in a panel's sidebar, with a dropdown (Logistics Partner Panel > Finance) */
 .nav-section { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
 .nav-section__heading { padding-left: 10px; }
@@ -1142,7 +1155,7 @@ button.topnav__item:hover, a.topnav__item:hover, .topnav__follow a:hover { color
 .nav-dropdown[aria-expanded="true"] .nav-dropdown__chevron { transform: rotate(180deg); }
 .nav-dropdown.is-inside { color: var(--link); }
 .nav-dropdown__list { margin: 0 0 6px; padding: 0; list-style: none; }
-.nav-dropdown__list a { display: block; padding: 6px 10px 6px 38px; border-radius: 8px; font-size: 14px; }
+.nav-dropdown__list a { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 38px; border-radius: 8px; font-size: 14px; }
 .nav-dropdown__list a:hover { background: var(--surface-2); color: var(--link); }
 .nav-dropdown__list a[aria-current] { background: var(--surface-2); color: var(--link); font-weight: 700; }
 
